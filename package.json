@@ -4,6 +4,11 @@
   "description": "For handling bulk operations in Shopify",
   "main": "dist/src/index.js",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kampfire-dev/bulkify.git"
+  },
+  "homepage": "https://github.com/kampfire-dev/bulkify",
   "scripts": {
     "test": "jest",
     "build": "tsc",
