@@ -5,5 +5,5 @@ This package provides a simple way to perform bulk operations using the Shopify 
 ## Installation
 
 ```bash
-npm i @shopify/bulk
+npm i @kampfire/bulkify
 ```
