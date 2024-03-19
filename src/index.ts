@@ -7,12 +7,24 @@ import path from "path";
 import { createInterface } from "readline";
 import { wait } from "./utils/index.js";
 import ora from "ora";
+import { ClientResponse } from "@shopify/graphql-client";
 
 interface BulkOperationsOptions {
   client: GQLClient;
   resultsPath?: string;
   deleteFiles?: boolean;
 }
+
+type BullkOperationResponse = {
+  bulkOperation: {
+    id: string;
+    status: string;
+  };
+  userErrors: {
+    field: string;
+    message: string;
+  }[];
+};
 
 export default class BulkOperations {
   client: GQLClient;
@@ -26,7 +38,11 @@ export default class BulkOperations {
     this.deleteFiles = options.deleteFiles || true;
   }
 
-  async createBulkQuery(query: string) {
+  async createBulkQuery(query: string): Promise<
+    ClientResponse<{
+      bulkOperationRunQuery: BullkOperationResponse;
+    }>
+  > {
     const BULK_QUERY = `mutation {
       bulkOperationRunQuery(
         query:"""
@@ -47,22 +63,20 @@ export default class BulkOperations {
     console.log(BULK_QUERY);
 
     const result = await this.client.request<{
-      bulkOperationRunQuery: {
-        bulkOperation: {
-          id: string;
-          status: string;
-        };
-        userErrors: {
-          field: string;
-          message: string;
-        }[];
-      };
+      bulkOperationRunQuery: BullkOperationResponse;
     }>(BULK_QUERY);
 
     return result;
   }
 
-  async createBulkMutation(mutation: string, stagedUploadPath: string) {
+  async createBulkMutation(
+    mutation: string,
+    stagedUploadPath: string
+  ): Promise<
+    ClientResponse<{
+      bulkOperationRunMutation: BullkOperationResponse;
+    }>
+  > {
     const BULK_MUTATION = `mutation {
       bulkOperationRunMutation(
         mutation: "${mutation}",
