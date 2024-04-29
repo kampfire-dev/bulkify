@@ -4,10 +4,13 @@ import fs, { createReadStream } from "fs";
 import fsPromises from "fs/promises";
 import stream from "node:stream";
 import path from "path";
-import { createInterface } from "readline";
+import { Interface, createInterface } from "readline";
 import { wait } from "./utils/index.js";
 import ora from "ora";
 import { ClientResponse } from "@shopify/graphql-client";
+import { fileURLToPath } from "url";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 interface BulkOperationsOptions {
   client: GQLClient;
@@ -222,9 +225,11 @@ export default class BulkOperations {
     });
   }
 
-  private async rawBulkQuery(query: string) {
-    await this.createBulkQuery(query);
+  private async getReadInterface<T>() {
     const { jsonURL, bulkObjects } = await this.pollCurrentOperation();
+
+    console.log("Bulk objects found:", bulkObjects);
+    console.log("JSON URL:", jsonURL);
 
     if (bulkObjects === 0) {
       throw new Error("No bulk objects found");
@@ -254,6 +259,30 @@ export default class BulkOperations {
     });
 
     return rl;
+  }
+
+  private async rawBulkQuery(query: string): Promise<Interface> {
+    const { data } = await this.createBulkQuery(query);
+    if (!data) {
+      throw new Error("Bulk query not created");
+    }
+
+    const { bulkOperation, userErrors } = data.bulkOperationRunQuery;
+
+    if (userErrors.length > 0) {
+      console.log(userErrors[0]);
+      throw new Error("User errors found");
+    }
+
+    return await this.getReadInterface();
+  }
+
+  async *runLastBulkQuery<T>() {
+    const rl = await this.getReadInterface<T>();
+    for await (const line of rl) {
+      const obj = JSON.parse(line) as T;
+      yield obj;
+    }
   }
 
   async *runBulkQuery<T>(query: string) {
