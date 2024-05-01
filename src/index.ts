@@ -1,19 +1,18 @@
-import { GraphqlClient as GQLClient } from "@shopify/shopify-api";
+import { ClientResponse, GraphQLClient } from "@shopify/graphql-client";
 import { XMLParser } from "fast-xml-parser";
 import fs, { createReadStream } from "fs";
 import fsPromises from "fs/promises";
 import stream from "node:stream";
+import ora from "ora";
 import path from "path";
 import { Interface, createInterface } from "readline";
-import { wait } from "./utils/index.js";
-import ora from "ora";
-import { ClientResponse } from "@shopify/graphql-client";
 import { fileURLToPath } from "url";
+import { wait } from "./utils/index.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-interface BulkOperationsOptions {
-  client: GQLClient;
+interface BulkifyOptions {
+  client: GraphQLClient;
   resultsPath?: string;
   deleteFiles?: boolean;
 }
@@ -29,12 +28,12 @@ type BullkOperationResponse = {
   }[];
 };
 
-export default class BulkOperations {
-  client: GQLClient;
+export default class Bulkify {
+  client: GraphQLClient;
   resultsPath: string;
   private deleteFiles: boolean;
 
-  constructor(options: BulkOperationsOptions) {
+  constructor(options: BulkifyOptions) {
     this.client = options.client;
     this.resultsPath =
       options.resultsPath || path.resolve(__dirname, "results");
