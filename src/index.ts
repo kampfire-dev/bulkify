@@ -268,6 +268,8 @@ export default class Bulkify {
         fs.unlink(file, (err) => {
           if (err) {
             console.error("Error deleting file", err);
+          } else {
+            console.log("File deleted");
           }
         });
       }
