@@ -24,7 +24,6 @@
   "dependencies": {
     "@shopify/graphql-client": "^0.9.3",
     "@shopify/shopify-api": "^9.2.0",
-    "cli-spinners": "^2.9.2",
     "fast-xml-parser": "^4.3.4",
     "ora": "^8.0.1",
     "xml2js": "^0.6.2"

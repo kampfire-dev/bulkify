@@ -308,6 +308,26 @@ export default class Bulkify {
     }
   }
 
+  async runBulkMutation(mutation: string, filePath: string) {
+    const key = await this.uploadBulkJSONL(filePath);
+
+    const { data } = await this.createBulkMutation(mutation, key);
+
+    if (!data) {
+      throw new Error("Bulk mutation not created");
+    }
+
+    const { bulkOperation, userErrors } = data.bulkOperationRunMutation;
+
+    if (userErrors.length > 0) {
+      console.log(userErrors[0]);
+      throw new Error("User errors found");
+    }
+
+    const response = await this.pollCurrentOperation("MUTATION");
+    console.log("response", response);
+  }
+
   async uploadBulkJSONL(filePath: string) {
     const STAGED_UPLOADS_CREATE = `mutation {
       stagedUploadsCreate(input: {
