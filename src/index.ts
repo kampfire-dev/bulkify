@@ -240,8 +240,8 @@ export default class Bulkify {
     });
   }
 
-  private async getReadInterface<T>() {
-    const { jsonURL, bulkObjects } = await this.pollCurrentOperation();
+  private async getReadInterface<T>(type: "QUERY" | "MUTATION" = "QUERY") {
+    const { jsonURL, bulkObjects } = await this.pollCurrentOperation(type);
 
     console.log("Bulk objects found:", bulkObjects);
     console.log("JSON URL:", jsonURL);
@@ -292,6 +292,24 @@ export default class Bulkify {
     return await this.getReadInterface();
   }
 
+  private async rawBulkMutation(mutation: string, filePath: string) {
+    const key = await this.uploadBulkJSONL(filePath);
+    const { data } = await this.createBulkMutation(mutation, key);
+
+    if (!data) {
+      throw new Error("Bulk mutation not created");
+    }
+
+    const { bulkOperation, userErrors } = data.bulkOperationRunMutation;
+
+    if (userErrors.length > 0) {
+      console.log(userErrors[0]);
+      throw new Error("User errors found");
+    }
+
+    return await this.getReadInterface("MUTATION");
+  }
+
   async *runLastBulkQuery<T>() {
     const rl = await this.getReadInterface<T>();
     for await (const line of rl) {
@@ -308,24 +326,12 @@ export default class Bulkify {
     }
   }
 
-  async runBulkMutation(mutation: string, filePath: string) {
-    const key = await this.uploadBulkJSONL(filePath);
-
-    const { data } = await this.createBulkMutation(mutation, key);
-
-    if (!data) {
-      throw new Error("Bulk mutation not created");
+  async *runBulkMutation<T>(mutation: string, filePath: string) {
+    const rl = await this.rawBulkMutation(mutation, filePath);
+    for await (const line of rl) {
+      const obj = JSON.parse(line) as T;
+      yield obj;
     }
-
-    const { bulkOperation, userErrors } = data.bulkOperationRunMutation;
-
-    if (userErrors.length > 0) {
-      console.log(userErrors[0]);
-      throw new Error("User errors found");
-    }
-
-    const response = await this.pollCurrentOperation("MUTATION");
-    console.log("response", response);
   }
 
   async uploadBulkJSONL(filePath: string) {
