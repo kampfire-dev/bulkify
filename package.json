@@ -1,6 +1,6 @@
 {
   "name": "@kampfire/bulkify",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "For handling bulk operations in Shopify",
   "main": "dist/src/index.js",
   "type": "module",
