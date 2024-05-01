@@ -11,19 +11,23 @@
   "homepage": "https://github.com/kampfire-dev/bulkify",
   "scripts": {
     "build": "rimraf dist && tsc",
-    "dev": "tsc -w"
+    "dev": "tsc -w",
+    "test": "vitest",
+    "script": "tsx ./src/tests/script.ts"
   },
   "author": "Matt Oskamp",
   "license": "ISC",
   "devDependencies": {
     "@types/node": "18",
+    "dotenv": "^16.4.1",
     "rimraf": "^5.0.5",
     "tsx": "^4.7.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^1.5.3"
   },
   "dependencies": {
     "@shopify/graphql-client": "^0.9.3",
-    "@shopify/shopify-api": "^9.2.0",
+    "@shopify/shopify-api": "^9.7.2",
     "fast-xml-parser": "^4.3.4",
     "ora": "^8.0.1",
     "xml2js": "^0.6.2"

@@ -35,10 +35,12 @@ export default class Bulkify {
   private deleteFiles: boolean;
 
   constructor(options: BulkifyOptions) {
+    console.log(options);
     this.client = options.client;
     this.resultsPath =
       options.resultsPath || path.resolve(__dirname, "results");
-    this.deleteFiles = options.deleteFiles || true;
+    this.deleteFiles =
+      options.deleteFiles === undefined ? true : options.deleteFiles;
   }
 
   async createBulkQuery(query: string): Promise<
@@ -62,8 +64,6 @@ export default class Bulkify {
         }
       }
     }`;
-
-    console.log(BULK_QUERY);
 
     const result = await this.client.request<{
       bulkOperationRunQuery: BullkOperationResponse;
@@ -264,6 +264,7 @@ export default class Bulkify {
     });
 
     rl.addListener("close", () => {
+      console.log(this.deleteFiles);
       if (this.deleteFiles) {
         fs.unlink(file, (err) => {
           if (err) {
