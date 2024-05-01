@@ -1,4 +1,5 @@
-import { ClientResponse, GraphQLClient } from "@shopify/graphql-client";
+import { GraphqlClient } from "@shopify/shopify-api";
+import { ClientResponse } from "@shopify/graphql-client";
 import { XMLParser } from "fast-xml-parser";
 import fs, { createReadStream } from "fs";
 import fsPromises from "fs/promises";
@@ -12,7 +13,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 interface BulkifyOptions {
-  client: GraphQLClient;
+  client: GraphqlClient;
   resultsPath?: string;
   deleteFiles?: boolean;
 }
@@ -29,7 +30,7 @@ type BullkOperationResponse = {
 };
 
 export default class Bulkify {
-  client: GraphQLClient;
+  client: GraphqlClient;
   resultsPath: string;
   private deleteFiles: boolean;
 
@@ -111,7 +112,21 @@ export default class Bulkify {
     return result;
   }
 
-  async getBulkOperationStatus(type: "QUERY" | "MUTATION") {
+  async getBulkOperationStatus(type: "QUERY" | "MUTATION"): Promise<
+    ClientResponse<{
+      currentBulkOperation: {
+        id: string;
+        status: string;
+        errorCode: string;
+        createdAt: string;
+        completedAt: string;
+        objectCount: number;
+        fileSize: number;
+        url: string;
+        partialDataUrl: string;
+      };
+    }>
+  > {
     const BULK_QUERY_STATUS = `{
       currentBulkOperation(type: ${type}) {
         id
@@ -136,6 +151,7 @@ export default class Bulkify {
         objectCount: number;
         fileSize: number;
         url: string;
+        partialDataUrl: string;
       };
     }>(BULK_QUERY_STATUS);
 
