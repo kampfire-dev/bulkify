@@ -18,7 +18,7 @@
   "author": "Matt Oskamp",
   "license": "ISC",
   "devDependencies": {
-    "@types/node": "18",
+    "@types/node": "^20.11.14",
     "dotenv": "^16.4.1",
     "rimraf": "^5.0.5",
     "tsx": "^4.7.0",
@@ -29,8 +29,7 @@
     "@shopify/graphql-client": "^0.9.3",
     "@shopify/shopify-api": "^9.7.2",
     "fast-xml-parser": "^4.3.4",
-    "ora": "^8.0.1",
-    "xml2js": "^0.6.2"
+    "ora": "^8.0.1"
   },
   "types": "./dist/src/index.d.ts",
   "keywords": [

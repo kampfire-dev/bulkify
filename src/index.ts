@@ -1,12 +1,13 @@
-import { GraphqlClient } from "@shopify/shopify-api";
 import { ClientResponse } from "@shopify/graphql-client";
+import { GraphqlClient } from "@shopify/shopify-api";
 import { XMLParser } from "fast-xml-parser";
-import fs, { createReadStream } from "fs";
 import fsPromises from "fs/promises";
+import fs, { createReadStream } from "node:fs";
 import stream from "node:stream";
+import { blob } from "node:stream/consumers";
 import ora from "ora";
 import path from "path";
-import { Interface, createInterface } from "readline";
+import { createInterface } from "readline";
 import { fileURLToPath } from "url";
 import { wait } from "./utils/index.js";
 const __filename = fileURLToPath(import.meta.url);
@@ -239,7 +240,40 @@ export default class Bulkify {
     });
   }
 
-  private async getReadInterface<T>(type: "QUERY" | "MUTATION" = "QUERY") {
+  async *processURL<T>(url: string) {
+    const rl = await this.getInterfaceFromURL(url);
+    for await (const line of rl) {
+      const obj = JSON.parse(line) as T;
+      yield obj;
+    }
+  }
+
+  private async getInterfaceFromURL(jsonURL: string) {
+    const file = await this.writeResultsToFile(jsonURL);
+    console.log(`Bulk operation results written to: ${file}`);
+
+    const readStream = createReadStream(file, { encoding: "utf8" });
+    const rl = createInterface({
+      input: readStream,
+      crlfDelay: Infinity,
+    });
+
+    rl.addListener("close", () => {
+      if (this.deleteFiles) {
+        fs.unlink(file, (err) => {
+          if (err) {
+            console.error("Error deleting file", err);
+          }
+        });
+      }
+    });
+
+    return rl;
+  }
+
+  private async getReadInterfaceFromCurrentOperation<T>(
+    type: "QUERY" | "MUTATION" = "QUERY"
+  ) {
     const { jsonURL, bulkObjects } = await this.pollCurrentOperation(type);
 
     console.log("Bulk objects found:", bulkObjects);
@@ -253,32 +287,10 @@ export default class Bulkify {
       throw new Error("No JSON URL found");
     }
 
-    const file = await this.writeResultsToFile(jsonURL);
-    console.log(`Bulk operation results written to: ${file}`);
-
-    const readStream = createReadStream(file, { encoding: "utf8" });
-    const rl = createInterface({
-      input: readStream,
-      crlfDelay: Infinity,
-    });
-
-    rl.addListener("close", () => {
-      console.log(this.deleteFiles);
-      if (this.deleteFiles) {
-        fs.unlink(file, (err) => {
-          if (err) {
-            console.error("Error deleting file", err);
-          } else {
-            console.log("File deleted");
-          }
-        });
-      }
-    });
-
-    return rl;
+    return this.processURL<T>(jsonURL);
   }
 
-  private async rawBulkQuery(query: string): Promise<Interface> {
+  private async rawBulkQuery<T>(query: string) {
     const { data } = await this.createBulkQuery(query);
     if (!data) {
       throw new Error("Bulk query not created");
@@ -291,11 +303,12 @@ export default class Bulkify {
       throw new Error("User errors found");
     }
 
-    return await this.getReadInterface();
+    return this.getReadInterfaceFromCurrentOperation<T>();
   }
 
-  private async rawBulkMutation(mutation: string, filePath: string) {
+  private async bulkMutation(mutation: string, filePath: string) {
     const key = await this.uploadBulkJSONL(filePath);
+    console.log("Bulk mutation key:", key);
     const { data } = await this.createBulkMutation(mutation, key);
 
     if (!data) {
@@ -308,39 +321,31 @@ export default class Bulkify {
       console.log(userErrors[0]);
       throw new Error("User errors found");
     }
-
-    return await this.getReadInterface("MUTATION");
   }
 
-  async *runLastBulkQuery<T>() {
-    const rl = await this.getReadInterface<T>();
-    for await (const line of rl) {
-      const obj = JSON.parse(line) as T;
-      yield obj;
-    }
+  private async rawBulkMutation<T>(mutation: string, filePath: string) {
+    await this.bulkMutation(mutation, filePath);
+    return await this.getReadInterfaceFromCurrentOperation<T>("MUTATION");
   }
 
-  async *runBulkQuery<T>(query: string) {
-    const rl = await this.rawBulkQuery(query);
-    for await (const line of rl) {
-      const obj = JSON.parse(line) as T;
-      yield obj;
-    }
+  async runLastBulkQuery<T>() {
+    return this.getReadInterfaceFromCurrentOperation();
   }
 
-  async *runBulkMutation<T>(mutation: string, filePath: string) {
-    const rl = await this.rawBulkMutation(mutation, filePath);
-    for await (const line of rl) {
-      const obj = JSON.parse(line) as T;
-      yield obj;
-    }
+  runBulkQuery<T>(query: string) {
+    return this.rawBulkQuery<T>(query);
+  }
+
+  runBulkMutation<T>(mutation: string, filePath: string) {
+    return this.rawBulkMutation<T>(mutation, filePath);
   }
 
   async uploadBulkJSONL(filePath: string) {
+    const fileName = path.basename(filePath);
     const STAGED_UPLOADS_CREATE = `mutation {
       stagedUploadsCreate(input: {
         resource: BULK_MUTATION_VARIABLES,
-        filename: "${path.basename(filePath)}",
+        filename: "${fileName}",
         mimeType: "text/jsonl",
         httpMethod: POST
       }) {
@@ -397,20 +402,26 @@ export default class Bulkify {
     const { url, parameters } = target;
 
     const formData = new FormData();
-
     for (const param of parameters) {
       formData.append(param.name, param.value);
     }
-    formData.append("file", fs.createReadStream(filePath));
+    const fileStream = fs.createReadStream(filePath);
+    const file = await blob(fileStream);
+    formData.append("file", file, fileName);
 
     const uploadResponse = await fetch(url, {
       method: "POST",
       body: formData,
+      headers: {},
     });
 
-    const data = await uploadResponse.text();
-    const parser = new XMLParser();
-    const xml = parser.parse(data);
-    return xml.PostResponse.Key[0];
+    if (uploadResponse.ok) {
+      const data = await uploadResponse.text();
+      const parser = new XMLParser();
+      const xml = parser.parse(data);
+      return xml.PostResponse.Key;
+    } else {
+      throw new Error("Upload failed");
+    }
   }
 }

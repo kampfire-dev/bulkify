@@ -1,7 +1,13 @@
-import "dotenv/config";
-import "@shopify/shopify-api/adapters/node";
 import { ApiVersion, shopifyApi } from "@shopify/shopify-api";
+import "@shopify/shopify-api/adapters/node";
+import "dotenv/config";
+import { createWriteStream } from "fs";
+import { access, mkdir } from "fs/promises";
+import path, { dirname } from "path";
+import { fileURLToPath } from "url";
 import Bulkify from "..";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const shopify = shopifyApi({
   adminApiAccessToken: process.env.API_ACCESS_TOKEN,
@@ -23,6 +29,17 @@ async function run() {
     deleteFiles: true,
   });
 
+  const filePath = path.resolve(__dirname, "../../../../samples/price-changes");
+
+  try {
+    await access(filePath);
+  } catch (error) {
+    await mkdir(filePath, { recursive: true });
+  }
+
+  const fileName = path.join(filePath, "price-changes.jsonl");
+  const writeStream = createWriteStream(fileName);
+
   const query = `
   {
     productVariants(query:"tag:test") {
@@ -31,17 +48,42 @@ async function run() {
           id
           sku
           price
-          }
         }
       }
     }
-  `;
+  }`;
 
-  const it = bulkify.runBulkQuery(query);
+  const it = await bulkify.runBulkQuery(query);
 
   for await (const variant of it) {
+    const input: any = {
+      input: variant,
+    };
+    writeStream.write(JSON.stringify(input) + "\n");
     console.log(variant);
   }
+
+  writeStream.end();
+
+  const UPDATE_VARIANTS = `mutation call($input: ProductVariantInput!) {
+    productVariantUpdate(input: $input) {
+      productVariant {
+        sku
+        id
+      }
+      userErrors {
+        message
+        field
+      }
+    }
+  }`;
+
+  writeStream.on("close", async () => {
+    const it = await bulkify.runBulkMutation<any>(UPDATE_VARIANTS, fileName);
+    for await (const result of it) {
+      console.log(result);
+    }
+  });
 }
 
 run();
