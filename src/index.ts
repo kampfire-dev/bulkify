@@ -35,7 +35,6 @@ export default class Bulkify {
   private deleteFiles: boolean;
 
   constructor(options: BulkifyOptions) {
-    console.log(options);
     this.client = options.client;
     this.resultsPath =
       options.resultsPath || path.resolve(__dirname, "results");
