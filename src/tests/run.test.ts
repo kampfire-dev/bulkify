@@ -42,7 +42,7 @@ test("create", async () => {
     }
   `;
 
-  const it = await bulkify.runBulkQuery(query);
+  const { generator: it } = await bulkify.runBulkQuery(query);
 
   for await (const variant of it) {
     console.log(variant);

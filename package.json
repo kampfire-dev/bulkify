@@ -4,6 +4,9 @@
   "description": "For handling bulk operations in Shopify",
   "main": "dist/src/index.js",
   "type": "module",
+  "files": [
+    "dist/"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/kampfire-dev/bulkify.git"

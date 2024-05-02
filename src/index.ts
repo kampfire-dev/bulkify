@@ -303,7 +303,8 @@ export default class Bulkify {
       throw new Error("User errors found");
     }
 
-    return this.getReadInterfaceFromCurrentOperation<T>();
+    const generator = await this.getReadInterfaceFromCurrentOperation<T>();
+    return { generator, bulkOperation };
   }
 
   private async bulkMutation(mutation: string, filePath: string) {
@@ -321,15 +322,19 @@ export default class Bulkify {
       console.log(userErrors[0]);
       throw new Error("User errors found");
     }
+
+    return bulkOperation;
   }
 
   private async rawBulkMutation<T>(mutation: string, filePath: string) {
-    await this.bulkMutation(mutation, filePath);
-    return await this.getReadInterfaceFromCurrentOperation<T>("MUTATION");
+    const bulkOperation = await this.bulkMutation(mutation, filePath);
+    const generator =
+      await this.getReadInterfaceFromCurrentOperation<T>("MUTATION");
+    return { generator, bulkOperation };
   }
 
   async runLastBulkQuery<T>() {
-    return this.getReadInterfaceFromCurrentOperation();
+    return this.getReadInterfaceFromCurrentOperation<T>();
   }
 
   runBulkQuery<T>(query: string) {

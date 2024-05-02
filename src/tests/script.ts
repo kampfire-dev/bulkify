@@ -53,7 +53,7 @@ async function run() {
     }
   }`;
 
-  const it = await bulkify.runBulkQuery(query);
+  const { generator: it } = await bulkify.runBulkQuery(query);
 
   for await (const variant of it) {
     const input: any = {
@@ -78,11 +78,17 @@ async function run() {
     }
   }`;
 
-  writeStream.on("close", async () => {
-    const it = await bulkify.runBulkMutation<any>(UPDATE_VARIANTS, fileName);
-    for await (const result of it) {
-      console.log(result);
-    }
+  return new Promise<void>((resolve) => {
+    writeStream.on("close", async () => {
+      const { generator: it } = await bulkify.runBulkMutation<any>(
+        UPDATE_VARIANTS,
+        fileName
+      );
+      for await (const result of it) {
+        console.log(result);
+      }
+      resolve();
+    });
   });
 }
 
