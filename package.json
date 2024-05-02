@@ -16,7 +16,8 @@
     "build": "rimraf dist && tsc",
     "dev": "tsc -w",
     "test": "vitest",
-    "script": "tsx ./src/tests/script.ts"
+    "script": "tsx ./src/tests/script.ts",
+    "example:nested": "tsx ./src/examples/nested-objects.ts"
   },
   "author": "Matt Oskamp",
   "license": "ISC",

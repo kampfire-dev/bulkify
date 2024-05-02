@@ -4,6 +4,7 @@
 
 ## Key Features
 
+- **Streaming First**: Uses async generators to stream results, allowing you to process data as it arrives. This is especially useful for large datasets and memory efficiency.
 - **Efficient Bulk Operations**: Supports both bulk queries and mutations to handle large datasets efficiently.
 - **TypeScript Support**: Fully compatible with TypeScript for enhanced development experience.
 - **Lightweight Design**: Minimal dependencies ensure that the package is lightweight and fast.
@@ -88,7 +89,6 @@ You can find more examples, such as how to do a bulk query and mutation in a cou
 
 ## Gotchas
 
-- **Rate Limiting**: Be aware of Shopify's rate limits when performing bulk operations. Bulkify will automatically handle rate limiting and retry failed operations.
 - **You can only have a single bulk operation of each type running per store / app.**
 - **Nested Queries**: When using nested queries, the objects will appear after one another in the returned JSONL. To handle this, you should store the accumulated nested objects in an array and process them once you get to another parent object. See the [examples](https://github.com/kampfire-dev/bulkify/tree/main/examples) for more details.
 

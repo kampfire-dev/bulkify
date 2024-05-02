@@ -1,29 +1,11 @@
 import "dotenv/config";
-import { ApiVersion, shopifyApi } from "@shopify/shopify-api";
 import { dirname } from "path";
 import { fileURLToPath } from "url";
-import Bulkify from "../index.js"; // import Bulkify from "@kampfire/bulkify";
+import { bulkify } from "./setup.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 async function run() {
-  // Initialize the Shopify API client
-  const shopify = shopifyApi({
-    adminApiAccessToken: process.env.API_ACCESS_TOKEN,
-    apiVersion: ApiVersion.January24,
-    isCustomStoreApp: true,
-    isEmbeddedApp: false,
-    hostName: process.env.SHOP_NAME || "",
-    apiSecretKey: "",
-  });
-
-  const session = shopify.session.customAppSession(process.env.SHOP_NAME || "");
-  const client = new shopify.clients.Graphql({ session });
-  const bulkify = new Bulkify({
-    client,
-    deleteFiles: true,
-  });
-
   // Define the bulk query for fetching product variants and their prices
   const priceQuery = `
   {
