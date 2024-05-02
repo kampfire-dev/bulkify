@@ -1,7 +1,7 @@
 import "dotenv/config";
 import "@shopify/shopify-api/adapters/node";
 import { expect, test } from "vitest";
-import Bulkify from "../index";
+import Bulkify from "../index.js";
 import { ApiVersion, shopifyApi } from "@shopify/shopify-api";
 
 const shopify = shopifyApi({

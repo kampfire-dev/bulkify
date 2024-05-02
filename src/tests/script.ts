@@ -5,7 +5,7 @@ import { createWriteStream } from "fs";
 import { access, mkdir } from "fs/promises";
 import path, { dirname } from "path";
 import { fileURLToPath } from "url";
-import Bulkify from "..";
+import Bulkify from "../index.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 

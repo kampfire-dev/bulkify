@@ -4,5 +4,13 @@ tests
 .gitignore
 .turbo
 
-!dist/*.js
-!dist/*.d.ts
+# Include specific file types in dist, but ignore others
+dist/**
+# dist/*.js.map
+# dist/*.d.ts.map
+# !dist/*.js
+# !dist/*.d.ts
+
+# Explicitly ignore entire directories in dist
+dist/tests
+dist/examples
