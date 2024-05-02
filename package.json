@@ -4,8 +4,8 @@
   "description": "For handling bulk operations in Shopify",
   "main": "dist/index.js",
   "files": [
-    "dist/*.js",
-    "dist/*.d.ts"
+    "dist/**/*.js",
+    "dist/**/*.d.ts"
   ],
   "type": "module",
   "repository": {
