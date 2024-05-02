@@ -3,3 +3,6 @@ tests
 .env
 .gitignore
 .turbo
+
+!dist/*.js
+!dist/*.d.ts

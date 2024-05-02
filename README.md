@@ -85,7 +85,11 @@ These are the main functions and classes provided by Bulkify, however there are 
 - **filePath**: Path to the JSONL file containing data for mutations.
 - Returns an async generator yielding mutation results.
 
-### `
+### `processURL(url)`
+
+- Useful for processing a URL returned from a bulk operation (like from a webhook).
+- **url**: The URL of the resulting JSONL file.
+- Returns an async generator yielding the results of the bulk operation.
 
 ## Examples
 

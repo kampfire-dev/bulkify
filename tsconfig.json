@@ -30,5 +30,5 @@
     "lib": ["es2022", "ESNext"],
   },
   "include": ["src"],
-  "exclude": ["node_modules", "dist", "src/tests"],
+  "exclude": ["node_modules", "dist", "src/tests", "src/examples"],
 }
