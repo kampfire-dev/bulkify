@@ -1,7 +1,6 @@
 {
   "compilerOptions": {
     /* Base Options: */
-    "rootDir": "src",
     "esModuleInterop": true,
     "skipLibCheck": true,
     "target": "es2022",
@@ -9,6 +8,7 @@
     "resolveJsonModule": true,
     "moduleDetection": "force",
     "isolatedModules": true,
+    "rootDir": "src",
 
     /* Strictness */
     "strict": true,
@@ -24,13 +24,17 @@
     "declaration": true,
 
     /* AND if you're building for a library in a monorepo: */
-    "composite": true,
     "declarationMap": true,
 
     /* If your code doesn't run in the DOM: */
     "lib": ["es2022", "ESNext"],
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"],
-  // "exclude": ["node_modules", "dist", "src/tests", "src/examples"],
+  "include": ["src"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/results",
+    "src/tests",
+    "src/examples",
+  ],
 }

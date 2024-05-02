@@ -3,17 +3,18 @@
   "version": "1.6.2",
   "description": "For handling bulk operations in Shopify",
   "main": "dist/index.js",
-  "type": "module",
   "files": [
-    "dist/"
+    "dist/*.js",
+    "dist/*.d.ts"
   ],
+  "type": "module",
   "repository": {
     "type": "git",
     "url": "https://github.com/kampfire-dev/bulkify.git"
   },
   "homepage": "https://github.com/kampfire-dev/bulkify",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "rimraf dist && tsc",
     "dev": "tsc -w",
     "test": "vitest",
     "script": "tsx ./src/tests/script.ts",
