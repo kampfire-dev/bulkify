@@ -66,6 +66,8 @@ run();
 
 ## API Reference
 
+These are the main functions and classes provided by Bulkify, however there are additional functions and classes available for more advanced use cases.
+
 ### `Bulkify(options)`
 
 - **options.client**: A configured Shopify GraphQL client instance.
@@ -82,6 +84,8 @@ run();
 - **mutation**: The GraphQL mutation string.
 - **filePath**: Path to the JSONL file containing data for mutations.
 - Returns an async generator yielding mutation results.
+
+### `
 
 ## Examples
 
