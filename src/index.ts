@@ -328,8 +328,9 @@ export default class Bulkify {
 
   private async rawBulkMutation<T>(mutation: string, filePath: string) {
     const bulkOperation = await this.bulkMutation(mutation, filePath);
-    const generator =
-      await this.getReadInterfaceFromCurrentOperation<T>("MUTATION");
+    const generator = await this.getReadInterfaceFromCurrentOperation<T>(
+      "MUTATION"
+    );
     return { generator, bulkOperation };
   }
 
@@ -426,6 +427,9 @@ export default class Bulkify {
       const xml = parser.parse(data);
       return xml.PostResponse.Key;
     } else {
+      console.log(uploadResponse.status);
+      console.log(uploadResponse.statusText);
+      console.log(await uploadResponse.text());
       throw new Error("Upload failed");
     }
   }
