@@ -158,6 +158,51 @@ export default class Bulkify {
     return result;
   }
 
+  async cancelBulkOperation(id: string) {
+    const CANCEL_BULK_OPERATION = `
+      mutation bulkOperationCancel($id: ID!) {
+        bulkOperationCancel(id: $id) {
+          bulkOperation {
+            # BulkOperation fields
+            id
+            status
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+
+    const result = await this.client.request<{
+      bulkOperationCancel: {
+        bulkOperation: {
+          id: string;
+          status: string;
+        };
+        userErrors: {
+          field: string;
+          message: string;
+        }[];
+      };
+    }>(CANCEL_BULK_OPERATION);
+
+    return result;
+  }
+
+  async cancelCurrentBulkOperation(type: "QUERY" | "MUTATION") {
+    const result = await this.getBulkOperationStatus(type);
+
+    if (!result.data?.currentBulkOperation) {
+      throw new Error("No bulk operation found");
+    }
+
+    const { id } = result.data.currentBulkOperation;
+
+    return this.cancelBulkOperation(id);
+  }
+
   async pollCurrentOperation(
     type: "QUERY" | "MUTATION" = "QUERY",
     pollingTime: number = 2000
