@@ -10,11 +10,12 @@ import path from "path";
 import { createInterface } from "readline";
 import { fileURLToPath } from "url";
 import { wait } from "./utils/index.js";
+import { AdminApiClient } from "@shopify/admin-api-client";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 interface BulkifyOptions {
-  client: GraphqlClient;
+  client: GraphqlClient | AdminApiClient;
   resultsPath?: string;
   deleteFiles?: boolean;
 }
@@ -30,8 +31,25 @@ type BullkOperationResponse = {
   }[];
 };
 
+type StagedUploadsCreateResponse = {
+  stagedUploadsCreate: {
+    userErrors: {
+      field: string;
+      message: string;
+    }[];
+    stagedTargets: {
+      url: string;
+      resourceUrl: string;
+      parameters: {
+        name: string;
+        value: string;
+      }[];
+    }[];
+  };
+};
+
 export default class Bulkify {
-  client: GraphqlClient;
+  client: GraphqlClient | AdminApiClient;
   resultsPath: string;
   private deleteFiles: boolean;
 
@@ -65,11 +83,17 @@ export default class Bulkify {
       }
     }`;
 
-    const result = await this.client.request<{
-      bulkOperationRunQuery: BullkOperationResponse;
-    }>(BULK_QUERY);
-
-    return result;
+    if (this.client instanceof GraphqlClient) {
+      const result = await this.client.request<{
+        bulkOperationRunQuery: BullkOperationResponse;
+      }>(BULK_QUERY);
+      return result;
+    } else {
+      const result = await this.client.request<{
+        bulkOperationRunQuery: BullkOperationResponse;
+      }>(BULK_QUERY);
+      return result;
+    }
   }
 
   async createBulkMutation(
@@ -96,20 +120,17 @@ export default class Bulkify {
       }
     }`;
 
-    const result = await this.client.request<{
-      bulkOperationRunMutation: {
-        bulkOperation: {
-          id: string;
-          status: string;
-        };
-        userErrors: {
-          field: string;
-          message: string;
-        }[];
-      };
-    }>(BULK_MUTATION);
-
-    return result;
+    if (this.client instanceof GraphqlClient) {
+      const result = await this.client.request<{
+        bulkOperationRunMutation: BullkOperationResponse;
+      }>(BULK_MUTATION);
+      return result;
+    } else {
+      const result = await this.client.request<{
+        bulkOperationRunMutation: BullkOperationResponse;
+      }>(BULK_MUTATION);
+      return result;
+    }
   }
 
   async getBulkOperationStatus(type: "QUERY" | "MUTATION"): Promise<
@@ -141,21 +162,37 @@ export default class Bulkify {
       }
     }`;
 
-    const result = await this.client.request<{
-      currentBulkOperation: {
-        id: string;
-        status: string;
-        errorCode: string;
-        createdAt: string;
-        completedAt: string;
-        objectCount: number;
-        fileSize: number;
-        url: string;
-        partialDataUrl: string;
-      };
-    }>(BULK_QUERY_STATUS);
-
-    return result;
+    if (this.client instanceof GraphqlClient) {
+      const result = await this.client.request<{
+        currentBulkOperation: {
+          id: string;
+          status: string;
+          errorCode: string;
+          createdAt: string;
+          completedAt: string;
+          objectCount: number;
+          fileSize: number;
+          url: string;
+          partialDataUrl: string;
+        };
+      }>(BULK_QUERY_STATUS);
+      return result;
+    } else {
+      const result = await this.client.request<{
+        currentBulkOperation: {
+          id: string;
+          status: string;
+          errorCode: string;
+          createdAt: string;
+          completedAt: string;
+          objectCount: number;
+          fileSize: number;
+          url: string;
+          partialDataUrl: string;
+        };
+      }>(BULK_QUERY_STATUS);
+      return result;
+    }
   }
 
   async cancelBulkOperation(id: string) {
@@ -175,20 +212,26 @@ export default class Bulkify {
       }
     `;
 
-    const result = await this.client.request<{
-      bulkOperationCancel: {
-        bulkOperation: {
-          id: string;
-          status: string;
+    if (this.client instanceof GraphqlClient) {
+      const result = await this.client.request<{
+        bulkOperationCancel: {
+          bulkOperation: {
+            id: string;
+            status: string;
+          };
+          userErrors: {
+            field: string;
+            message: string;
+          }[];
         };
-        userErrors: {
-          field: string;
-          message: string;
-        }[];
-      };
-    }>(CANCEL_BULK_OPERATION);
-
-    return result;
+      }>(CANCEL_BULK_OPERATION);
+      return result;
+    } else {
+      const result = await this.client.request<{
+        bulkOperationCancel: BullkOperationResponse;
+      }>(CANCEL_BULK_OPERATION);
+      return result;
+    }
   }
 
   async cancelCurrentBulkOperation(type: "QUERY" | "MUTATION") {
@@ -415,22 +458,17 @@ export default class Bulkify {
       }
     }`;
 
-    const response = await this.client.request<{
-      stagedUploadsCreate: {
-        userErrors: {
-          field: string;
-          message: string;
-        }[];
-        stagedTargets: {
-          url: string;
-          resourceUrl: string;
-          parameters: {
-            name: string;
-            value: string;
-          }[];
-        }[];
-      };
-    }>(STAGED_UPLOADS_CREATE);
+    let response: ClientResponse<StagedUploadsCreateResponse>;
+
+    if (this.client instanceof GraphqlClient) {
+      response = await this.client.request<StagedUploadsCreateResponse>(
+        STAGED_UPLOADS_CREATE
+      );
+    } else {
+      response = await this.client.request<StagedUploadsCreateResponse>(
+        STAGED_UPLOADS_CREATE
+      );
+    }
 
     if (!response.data) {
       throw new Error("No data found in response");

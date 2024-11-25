@@ -1,29 +1,20 @@
-import { ApiVersion, shopifyApi } from "@shopify/shopify-api";
-import "@shopify/shopify-api/adapters/node";
 import "dotenv/config";
 import { createWriteStream } from "fs";
 import { access, mkdir } from "fs/promises";
 import path, { dirname } from "path";
 import { fileURLToPath } from "url";
 import Bulkify from "../index.js";
+import { createAdminApiClient } from "@shopify/admin-api-client";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const shopify = shopifyApi({
-  adminApiAccessToken: process.env.API_ACCESS_TOKEN,
-  privateAppStorefrontAccessToken: process.env.API_ACCESS_TOKEN,
-  apiKey: process.env.API_KEY || "",
-  apiSecretKey: process.env.API_SECRET_KEY || "",
-  apiVersion: ApiVersion.January24,
-  hostName: process.env.SHOP_NAME || "",
-  scopes: [],
-  isEmbeddedApp: false,
-  isCustomStoreApp: true,
+const client = createAdminApiClient({
+  accessToken: process.env.API_ACCESS_TOKEN || "",
+  storeDomain: process.env.SHOP_NAME || "",
+  apiVersion: "2024-07",
 });
 
 async function run() {
-  const session = shopify.session.customAppSession(process.env.SHOP_NAME || "");
-  const client = new shopify.clients.Graphql({ session });
   const bulkify = new Bulkify({
     client,
     deleteFiles: true,

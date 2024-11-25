@@ -2,18 +2,12 @@ import "dotenv/config";
 import "@shopify/shopify-api/adapters/node";
 import { expect, test } from "vitest";
 import Bulkify from "../index.js";
-import { ApiVersion, shopifyApi } from "@shopify/shopify-api";
+import { createAdminApiClient } from "@shopify/admin-api-client";
 
-const shopify = shopifyApi({
-  adminApiAccessToken: process.env.API_ACCESS_TOKEN,
-  privateAppStorefrontAccessToken: process.env.API_ACCESS_TOKEN,
-  apiKey: process.env.API_KEY || "",
-  apiSecretKey: process.env.API_SECRET_KEY || "",
-  apiVersion: ApiVersion.January24,
-  hostName: process.env.SHOP_NAME || "",
-  scopes: [],
-  isEmbeddedApp: false,
-  isCustomStoreApp: true,
+const client = createAdminApiClient({
+  accessToken: process.env.API_ACCESS_TOKEN || "",
+  storeDomain: process.env.SHOP_NAME || "",
+  apiVersion: "2024-07",
 });
 
 test("run", async () => {
@@ -21,8 +15,6 @@ test("run", async () => {
 });
 
 test("create", async () => {
-  const session = shopify.session.customAppSession(process.env.SHOP_NAME || "");
-  const client = new shopify.clients.Graphql({ session });
   const bulkify = new Bulkify({
     client,
     deleteFiles: false,

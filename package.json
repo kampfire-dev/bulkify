@@ -1,6 +1,6 @@
 {
   "name": "@kampfire/bulkify",
-  "version": "1.8.2",
+  "version": "1.8.3",
   "description": "For handling bulk operations in Shopify",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
@@ -32,8 +32,9 @@
     "vitest": "^1.5.3"
   },
   "dependencies": {
+    "@shopify/admin-api-client": "^1.0.4",
     "@shopify/graphql-client": "^0.9.3",
-    "@shopify/shopify-api": "^11.4.0",
+    "@shopify/shopify-api": "^11.6.0",
     "fast-xml-parser": "^4.3.4",
     "ora": "^8.0.1"
   },
