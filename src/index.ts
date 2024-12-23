@@ -18,6 +18,7 @@ interface BulkifyOptions {
   client: GraphqlClient | AdminApiClient;
   resultsPath?: string;
   deleteFiles?: boolean;
+  debug?: boolean;
 }
 
 type BullkOperationResponse = {
@@ -52,6 +53,7 @@ export default class Bulkify {
   client: GraphqlClient | AdminApiClient;
   resultsPath: string;
   private deleteFiles: boolean;
+  private debug?: boolean;
 
   constructor(options: BulkifyOptions) {
     this.client = options.client;
@@ -59,6 +61,7 @@ export default class Bulkify {
       options.resultsPath || path.resolve(__dirname, "results");
     this.deleteFiles =
       options.deleteFiles === undefined ? true : options.deleteFiles;
+    this.debug = options.debug;
   }
 
   async createBulkQuery(query: string): Promise<
@@ -82,6 +85,10 @@ export default class Bulkify {
         }
       }
     }`;
+
+    if (this.debug) {
+      console.log(BULK_QUERY);
+    }
 
     if (this.client instanceof GraphqlClient) {
       const result = await this.client.request<{
@@ -119,6 +126,10 @@ export default class Bulkify {
         }
       }
     }`;
+
+    if (this.debug) {
+      console.log(BULK_MUTATION);
+    }
 
     if (this.client instanceof GraphqlClient) {
       const result = await this.client.request<{
@@ -224,12 +235,20 @@ export default class Bulkify {
             message: string;
           }[];
         };
-      }>(CANCEL_BULK_OPERATION);
+      }>(CANCEL_BULK_OPERATION, {
+        variables: {
+          id,
+        },
+      });
       return result;
     } else {
       const result = await this.client.request<{
         bulkOperationCancel: BullkOperationResponse;
-      }>(CANCEL_BULK_OPERATION);
+      }>(CANCEL_BULK_OPERATION, {
+        variables: {
+          id,
+        },
+      });
       return result;
     }
   }
