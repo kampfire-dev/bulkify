@@ -1,6 +1,6 @@
 {
   "name": "@kampfire/bulkify",
-  "version": "1.8.5",
+  "version": "1.8.6",
   "description": "For handling bulk operations in Shopify",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
@@ -19,7 +19,8 @@
     "dev": "tsc -w",
     "test": "vitest",
     "script": "tsx ./src/tests/script.ts",
-    "example:nested": "tsx ./src/examples/nested-objects.ts"
+    "example:nested": "tsx ./src/examples/nested-objects.ts",
+    "deploy": "pnpm build && npm publish"
   },
   "author": "Matt Oskamp",
   "license": "ISC",
