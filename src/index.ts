@@ -283,6 +283,10 @@ export default class Bulkify {
       const { status, errorCode, objectCount, url } =
         result.data.currentBulkOperation;
 
+      if (this.debug) {
+        console.log(result.data.currentBulkOperation);
+      }
+
       spinner.text = `Polling current operation: ${status}`;
 
       if (status === "COMPLETED") {
