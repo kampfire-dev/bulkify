@@ -188,13 +188,24 @@ One of `client` or `request` is required.
 ## Things to know
 
 - **Concurrent operations.** From API 2026-01, each app can run up to five bulk operations of each type (queries, mutations) per store at once. Before that it was one.
-- **Nested results.** Connections inside a bulk query come back as separate lines after their parent, each with a `__parentId`. To rebuild the nesting, collect the child lines until the next parent arrives. [`nested-objects.ts`](https://github.com/kampfire-dev/bulkify/tree/main/src/examples/nested-objects.ts) shows one way, using `__typename` to tell the lines apart.
+- **Nested results.** Connections inside a bulk query come back as separate lines after their parent, each with a `__parentId`. Children always come after their parent, so you can attach each one to its parent as it arrives. [`nested-results.ts`](https://github.com/kampfire-dev/bulkify/tree/main/src/examples/nested-results.ts) shows how.
 - **No results.** When a query matches nothing, the generator yields nothing.
 - **Result links expire.** Download results soon after an operation completes.
 
 ## Examples
 
-More examples are in [`src/examples`](https://github.com/kampfire-dev/bulkify/tree/main/src/examples).
+In [`src/examples`](https://github.com/kampfire-dev/bulkify/tree/main/src/examples):
+
+- [`nested-results.ts`](https://github.com/kampfire-dev/bulkify/tree/main/src/examples/nested-results.ts): reads products with their variants and rebuilds the nesting with `__parentId`
+- [`update-prices.ts`](https://github.com/kampfire-dev/bulkify/tree/main/src/examples/update-prices.ts): changes the price of every variant of tagged products, with a bulk query feeding a bulk mutation
+
+To run them against a store, set `SHOPIFY_STORE` and `SHOPIFY_ACCESS_TOKEN` (or
+`SHOPIFY_API_KEY` and `SHOPIFY_API_SECRET`), then:
+
+```sh
+pnpm example:nested sale        # products tagged "sale"
+pnpm example:prices sale -10    # 10% off their variants
+```
 
 ## Shopify docs
 
