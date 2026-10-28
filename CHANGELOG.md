@@ -2,24 +2,31 @@
 
 ## 2.0.0
 
+The first release since 1.8.6. These notes cover everything since then.
+
 ### Breaking changes
 
 - **Shopify Admin API 2026-01 or newer is required.** `runBulkQuery` and
   `runBulkMutation` now wait on the operation they started, by id, using
   `bulkOperation(id:)`, which Shopify added in 2026-01.
 - **Node.js 22 or newer is required.**
-- **The spinner is off by default.** Pass `spinner: true` to show it.
+- **Shopify's packages are no longer installed with Bulkify.**
+  `@shopify/shopify-api`, `@shopify/admin-api-client` and
+  `@shopify/graphql-client` used to be dependencies. If you import any of
+  them, add them to your own `package.json`.
+- **The terminal spinner is off by default.** It used to always show. Pass
+  `spinner: true` to show it.
 - **Empty results yield nothing.** `runBulkQuery` and `runBulkMutation` used to
   throw `No bulk objects found` when nothing matched. The generator is now
   empty instead.
 - **Removed the "newest operation of a type" methods**, which could pick up an
   operation someone else started:
 
-  | Removed                            | Use instead                                                                        |
-  | ---------------------------------- | ---------------------------------------------------------------------------------- |
-  | `pollCurrentOperation(type)`       | `waitForBulkOperation(id)`                                                         |
-  | `getBulkOperationStatus(type)`     | `getBulkOperation(id)`                                                             |
-  | `cancelCurrentBulkOperation(type)` | `cancelBulkOperation(id)`                                                          |
+  | Removed                            | Use instead                                                                                         |
+  | ---------------------------------- | --------------------------------------------------------------------------------------------------- |
+  | `pollCurrentOperation(type)`       | `waitForBulkOperation(id)`                                                                          |
+  | `getBulkOperationStatus(type)`     | `getBulkOperation(id)`                                                                              |
+  | `cancelCurrentBulkOperation(type)` | `cancelBulkOperation(id)`                                                                           |
   | `runLastBulkQuery()`               | Keep the `id` from `startBulkQuery`, then `waitForBulkOperation(id)` and `streamURL(operation.url)` |
 
 - **Errors.** When Shopify refuses to start an operation, Bulkify throws
@@ -33,12 +40,25 @@
   directory by default (it used to be inside the package's own folder), with a
   `.jsonl` extension.
 
+### Added
+
+- **Background jobs.** `startBulkQuery` starts a bulk query without waiting.
+  `getBulkOperation(id)` and `waitForBulkOperation(id)` check on it, and
+  `streamURL(url)` reads the results without writing a file.
+- **Any client.** `client` accepts anything with Shopify's
+  `request(query, { variables })` method, not only Shopify's two clients. The
+  new `request` option takes a plain function instead, for example one that
+  handles rate limits.
+- **Error classes.** `BulkifyUserError`, whose `inProgress` is `true` when other
+  bulk operations are running, and `BulkifyOperationError`.
+- **`spinner` option.**
+- **Generated types** for Bulkify's own GraphQL operations, from Shopify's
+  Admin schema.
+- **Exported operations:** `RUN_BULK_QUERY`, `RUN_BULK_MUTATION`,
+  `GET_BULK_OPERATION` and `STAGED_UPLOADS_CREATE`.
+
 ### Fixed
 
-- `BulkifyUserError.inProgress` is also `true` for `LIMIT_REACHED`, which
-  Shopify returns once the store's limit of concurrent operations is reached.
-- `startBulkQuery` always sent `groupObjects: null`, which Shopify rejects, so
-  it failed on every call unless `groupObjects` was set.
 - `runBulkQuery` and `runBulkMutation` could follow another operation running
   on the same store instead of their own.
 - Queries and mutations containing quotes, `"""` or line breaks broke the
@@ -48,20 +68,6 @@
 - Uploading a mutation's JSONL file no longer depends on parsing the storage
   provider's XML response. It uses the upload key Shopify returns.
 
-### Added
-
-- Types for Bulkify's own GraphQL operations, generated from Shopify's Admin
-  schema (`pnpm codegen`).
-- `RUN_BULK_MUTATION` and `STAGED_UPLOADS_CREATE` are exported alongside
-  `RUN_BULK_QUERY` and `GET_BULK_OPERATION`.
-
 ### Removed
 
 - The `fast-xml-parser` dependency.
-
-## 1.9.0
-
-- `request` option to send Bulkify's calls through your own client.
-- `startBulkQuery`, `getBulkOperation`, `waitForBulkOperation` and
-  `streamURL` for working with operations by id.
-- `spinner` option.

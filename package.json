@@ -11,7 +11,7 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/kampfire-dev/bulkify.git"
+    "url": "git+https://github.com/kampfire-dev/bulkify.git"
   },
   "homepage": "https://github.com/kampfire-dev/bulkify",
   "scripts": {
