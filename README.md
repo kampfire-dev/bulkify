@@ -238,9 +238,8 @@ for it.
 The scheduled workflow (`.github/workflows/scheduled.yml`) runs the store test
 every Monday and checks Bulkify's queries against the next Shopify API
 version. If either fails, it opens an issue. It needs a `shopify-store`
-environment in the repo settings with a `SHOPIFY_STORE` variable and
-`SHOPIFY_API_KEY` and `SHOPIFY_API_SECRET` secrets, with the values from
-`ci-app/.env`. Run it by hand from
+environment in the repo settings with `SHOPIFY_STORE`, `SHOPIFY_API_KEY` and
+`SHOPIFY_API_SECRET` secrets, with the values from `ci-app/.env`. Run it by hand from
 the Actions tab before publishing.
 
 ## Contributing
