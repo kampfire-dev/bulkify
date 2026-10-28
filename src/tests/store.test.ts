@@ -111,17 +111,18 @@ describe.skipIf(!hasCredentials)("store", () => {
     }
   }
 
-  /** Search is updated a little after products change, so wait for it */
-  async function waitForSearch(query: string, count: number) {
-    for (let attempt = 0; attempt < 30; attempt++) {
-      const data = await graphql<{ productsCount: { count: number } }>(
-        `query ($query: String!) { productsCount(query: $query) { count } }`,
-        { query },
-      );
-      if (data.productsCount.count === count) return;
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+  /**
+   * Shopify's search finds new products a little after they're created, and
+   * bulk queries can lag behind other queries. Retry until all are found.
+   */
+  async function findAll(run: () => Promise<Product[]>) {
+    let products: Product[] = [];
+    for (let attempt = 1; attempt <= 6; attempt++) {
+      products = await run();
+      if (products.length >= PRODUCT_COUNT) break;
+      await new Promise((resolve) => setTimeout(resolve, 5000));
     }
-    throw new Error(`Search never found ${count} products for "${query}"`);
+    return products;
   }
 
   const productsQuery = (tag: string) => `{
@@ -181,16 +182,20 @@ describe.skipIf(!hasCredentials)("store", () => {
   });
 
   it("reads them with a bulk query", async () => {
-    await waitForSearch(`tag:${RUN_TAG}`, PRODUCT_COUNT);
-    const { generator } = await bulkify.runBulkQuery<Product>(productsQuery(RUN_TAG));
-    const ids = (await collect(generator)).map(({ id }) => id).sort();
+    const products = await findAll(async () => {
+      const { generator } = await bulkify.runBulkQuery<Product>(productsQuery(RUN_TAG));
+      return collect(generator);
+    });
+    const ids = products.map(({ id }) => id).sort();
     expect(ids).toEqual(created.map(({ id }) => id).sort());
   });
 
   it("starts, waits for and streams a bulk query by id", async () => {
-    const { id } = await bulkify.startBulkQuery(productsQuery(RUN_TAG));
-    const operation = await bulkify.waitForBulkOperation(id);
-    const products = await collect(bulkify.streamURL<Product>(operation.url));
+    const products = await findAll(async () => {
+      const { id } = await bulkify.startBulkQuery(productsQuery(RUN_TAG));
+      const operation = await bulkify.waitForBulkOperation(id);
+      return collect(bulkify.streamURL<Product>(operation.url));
+    });
     expect(products).toHaveLength(PRODUCT_COUNT);
   });
 
