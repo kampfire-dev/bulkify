@@ -77,6 +77,19 @@ const hasCredentials =
   !!SHOPIFY_STORE &&
   (!!SHOPIFY_ACCESS_TOKEN || (!!SHOPIFY_API_KEY && !!SHOPIFY_API_SECRET));
 
+// Locally the test skips without credentials. In CI that would pass silently,
+// so fail and say what's missing
+if (process.env.CI && !hasCredentials) {
+  const missing = Object.entries({
+    SHOPIFY_STORE,
+    SHOPIFY_API_KEY,
+    SHOPIFY_API_SECRET,
+  })
+    .filter(([, value]) => !value)
+    .map(([name]) => name);
+  throw new Error(`Store test is missing ${missing.join(", ")}`);
+}
+
 describe.skipIf(!hasCredentials)("store", () => {
   let client: ReturnType<typeof createAdminApiClient>;
   let bulkify: Bulkify;

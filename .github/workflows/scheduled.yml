@@ -31,7 +31,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:store
         env:
-          SHOPIFY_STORE: ${{ vars.SHOPIFY_STORE }}
+          SHOPIFY_STORE: ${{ secrets.SHOPIFY_STORE }}
           SHOPIFY_API_KEY: ${{ secrets.SHOPIFY_API_KEY }}
           SHOPIFY_API_SECRET: ${{ secrets.SHOPIFY_API_SECRET }}
 
