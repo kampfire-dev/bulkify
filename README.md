@@ -172,7 +172,7 @@ One of `client` or `request` is required.
 
 ### Run and read
 
-- **`runBulkQuery<T>(query)`**: starts a bulk query, waits for it and returns `{ generator, bulkOperation }`. `generator` yields one parsed line of type `T` at a time.
+- **`runBulkQuery<T>(query, { groupObjects? })`**: starts a bulk query, waits for it and returns `{ generator, bulkOperation }`. `generator` yields one parsed line of type `T` at a time. See [Nested results](#things-to-know) for `groupObjects`.
 - **`runBulkMutation<T>(mutation, filePath)`**: uploads the JSONL file at `filePath`, runs the mutation, waits for it and returns `{ generator, bulkOperation }`.
 
 ### By id
@@ -196,7 +196,7 @@ One of `client` or `request` is required.
 ## Things to know
 
 - **Concurrent operations.** From API 2026-01, each app can run up to five bulk operations of each type (queries, mutations) per store at once. Before that it was one.
-- **Nested results.** Connections inside a bulk query come back as separate lines after their parent, each with a `__parentId`. Children always come after their parent, so you can attach each one to its parent as it arrives. [`nested-results.ts`](https://github.com/kampfire-dev/bulkify/tree/main/src/examples/nested-results.ts) shows how.
+- **Nested results.** Connections inside a bulk query come back as separate lines, each child with a `__parentId` pointing at its parent. By default the lines can come in **any order**, so a child can arrive before its parent. [`nested-results.ts`](https://github.com/kampfire-dev/bulkify/tree/main/src/examples/nested-results.ts) shows how to put them back together. Passing `{ groupObjects: true }` puts each object's children right after it instead, but Shopify warns that grouping makes operations slower and more likely to time out.
 - **No results.** When a query matches nothing, the generator yields nothing.
 - **Result links expire.** Download results soon after an operation completes.
 

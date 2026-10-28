@@ -64,6 +64,23 @@ export interface BulkifyOptions {
   spinner?: boolean;
 }
 
+export type BulkQueryOptions = {
+  /**
+   * Put each object's children directly after it in the results. Off by
+   * default, when lines can come in any order. Shopify warns that grouping
+   * makes operations slower and more likely to time out.
+   */
+  groupObjects?: boolean;
+};
+
+/** Variables for RUN_BULK_QUERY. Shopify rejects an explicit null groupObjects */
+function bulkQueryVariables(
+  query: string,
+  { groupObjects }: BulkQueryOptions = {},
+): BulkifyRunQueryMutationVariables {
+  return groupObjects === undefined ? { query } : { query, groupObjects };
+}
+
 export type BulkOperation = {
   id: string;
   status: BulkOperationStatus;
@@ -247,19 +264,13 @@ export default class Bulkify {
   /** Starts a bulk query and returns the operation. Doesn't wait for it */
   async startBulkQuery(
     query: string,
-    options: { groupObjects?: boolean } = {},
+    options: BulkQueryOptions = {},
   ): Promise<{ id: string; status: BulkOperationStatus }> {
     if (this.debug) console.log(query);
     const data = await this.data<
       BulkifyRunQueryMutation,
       BulkifyRunQueryMutationVariables
-    >(RUN_BULK_QUERY, {
-      query,
-      // Shopify rejects an explicit null, so only send it when it's set
-      ...(options.groupObjects !== undefined && {
-        groupObjects: options.groupObjects,
-      }),
-    });
+    >(RUN_BULK_QUERY, bulkQueryVariables(query, options));
     return this.startedOperation(data.bulkOperationRunQuery, "Bulk query");
   }
 
@@ -362,10 +373,13 @@ export default class Bulkify {
 
   async createBulkQuery(
     query: string,
+    options: BulkQueryOptions = {},
   ): Promise<ClientResponse<BulkifyRunQueryMutation>> {
     if (this.debug) console.log(query);
-    const variables: BulkifyRunQueryMutationVariables = { query };
-    return this.run<BulkifyRunQueryMutation>(RUN_BULK_QUERY, variables);
+    return this.run<BulkifyRunQueryMutation>(
+      RUN_BULK_QUERY,
+      bulkQueryVariables(query, options),
+    );
   }
 
   async createBulkMutation(
@@ -490,8 +504,8 @@ export default class Bulkify {
     return this.readResults<T>(operation);
   }
 
-  private async rawBulkQuery<T>(query: string) {
-    const { data, errors } = await this.createBulkQuery(query);
+  private async rawBulkQuery<T>(query: string, options?: BulkQueryOptions) {
+    const { data, errors } = await this.createBulkQuery(query, options);
     const bulkOperation = this.startedOperation(
       data?.bulkOperationRunQuery,
       "Bulk query",
@@ -518,8 +532,8 @@ export default class Bulkify {
     return { generator, bulkOperation };
   }
 
-  runBulkQuery<T>(query: string) {
-    return this.rawBulkQuery<T>(query);
+  runBulkQuery<T>(query: string, options?: BulkQueryOptions) {
+    return this.rawBulkQuery<T>(query, options);
   }
 
   runBulkMutation<T>(mutation: string, filePath: string) {
