@@ -6,7 +6,7 @@
 - **Bulk queries and bulk mutations**, including uploading the JSONL file for mutations
 - **Works with any client**: Shopify's GraphQL clients, or your own request function (for example one that handles rate limits)
 - **Background jobs**: start an operation, then check on it or read its results later by id
-- **Typed**, with types generated from Shopify's Admin schema
+- **Typed results**: with Shopify's codegen, each result line is typed from your query
 
 ## Upgrading to 2.0
 
@@ -104,6 +104,56 @@ for await (const result of generator) {
 }
 ```
 
+## Typed results
+
+Bulk results don't have the shape of your query. Every node of every
+connection becomes its own line, without its nested connections, and nested
+nodes get a `__parentId`. `BulkLine<T>` turns a query's result type into
+those line types.
+
+If your app uses Shopify's codegen
+([`@shopify/api-codegen-preset`](https://www.npmjs.com/package/@shopify/api-codegen-preset)),
+add this once, in any `.d.ts` file your project includes:
+
+```ts
+import type { AdminQueries } from "@shopify/admin-api-client";
+
+declare module "@kampfire/bulkify" {
+  interface BulkifyQueries extends AdminQueries {}
+}
+```
+
+Then `runBulkQuery` types the lines of any query codegen knows:
+
+```ts
+const PRODUCTS = `#graphql
+  query BulkProducts {
+    products {
+      edges { node { id title variants { edges { node { id price } } } } }
+    }
+  }
+`;
+
+const { generator } = await bulkify.runBulkQuery(PRODUCTS);
+for await (const line of generator) {
+  if (line.__parentId === undefined) {
+    line.title; // a product: { id, title }
+  } else {
+    line.price; // a variant: { id, price, __parentId }
+  }
+}
+```
+
+- Codegen only sees queries that are named and start with `#graphql`, as above.
+- The lookup goes by the exact query text, so it doesn't work for queries built
+  with `${...}`. Pass the type instead:
+  `runBulkQuery<BulkLine<BulkProductsQuery>>(query)`, with the result type
+  from codegen. The same works for `streamURL<BulkLine<...>>(url)`.
+- When a node has several nested connections, select `__typename` in each to
+  tell their lines apart.
+- Without the setup, or for a query codegen doesn't know, lines are `unknown`
+  unless you pass a type.
+
 ## Background jobs
 
 For servers and workers that shouldn't block while an operation runs, start
@@ -172,7 +222,7 @@ One of `client` or `request` is required.
 
 ### Run and read
 
-- **`runBulkQuery<T>(query, { groupObjects? })`**: starts a bulk query, waits for it and returns `{ generator, bulkOperation }`. `generator` yields one parsed line of type `T` at a time. See [Nested results](#things-to-know) for `groupObjects`.
+- **`runBulkQuery<T>(query, { groupObjects? })`**: starts a bulk query, waits for it and returns `{ generator, bulkOperation }`. `generator` yields one parsed line at a time, typed as `T` when given, or from the query text (see [Typed results](#typed-results)). See [Nested results](#things-to-know) for `groupObjects`.
 - **`runBulkMutation<T>(mutation, filePath)`**: uploads the JSONL file at `filePath`, runs the mutation, waits for it and returns `{ generator, bulkOperation }`.
 
 ### By id
@@ -187,6 +237,12 @@ One of `client` or `request` is required.
 
 - **`processURL<T>(url)`**: like `streamURL`, but downloads the file to `resultsPath` first.
 - **`uploadBulkJSONL(filePath)`**: uploads a JSONL file for a bulk mutation and returns its `stagedUploadPath`.
+
+### Types
+
+- **`BulkLine<T>`**: the line types of a bulk query, from its result type `T`.
+- **`BulkifyQueries`**: query result types by query text, for `runBulkQuery` to look up. Empty until you extend it (see [Typed results](#typed-results)).
+- **`BulkQueryLine<Q>`**: the line type `runBulkQuery` gives the query text `Q`.
 
 ### Errors
 
