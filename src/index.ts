@@ -1,24 +1,105 @@
-import { ClientResponse } from "@shopify/graphql-client";
-import { GraphqlClient } from "@shopify/shopify-api";
 import { XMLParser } from "fast-xml-parser";
 import fsPromises from "fs/promises";
 import fs, { createReadStream } from "node:fs";
 import stream from "node:stream";
 import { blob } from "node:stream/consumers";
-import ora from "ora";
+import ora, { type Ora } from "ora";
 import path from "path";
 import { createInterface } from "readline";
 import { fileURLToPath } from "url";
 import { wait } from "./utils/index.js";
-import { AdminApiClient } from "@shopify/admin-api-client";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-interface BulkifyOptions {
-  client: GraphqlClient | AdminApiClient;
+/** The response shape of Shopify's GraphQL clients */
+export type ClientResponse<T> = {
+  data?: T;
+  errors?: unknown;
+};
+
+/**
+ * Anything with Shopify's `request(query, { variables })` method, such as
+ * `GraphqlClient` from @shopify/shopify-api or `createAdminApiClient`.
+ */
+export type GraphqlRequestClient = {
+  request<T = any>(
+    query: string,
+    options?: { variables?: Record<string, unknown> },
+  ): Promise<ClientResponse<T>>;
+};
+
+/**
+ * A plain request function that resolves to `data` and throws on GraphQL
+ * errors. Use it to run bulk operations through your own client, for example
+ * one that handles throttling.
+ */
+export type BulkifyRequest = <T = any>(
+  query: string,
+  variables?: Record<string, unknown>,
+) => Promise<T>;
+
+export interface BulkifyOptions {
+  client?: GraphqlRequestClient;
+  /** Used instead of `client` when given */
+  request?: BulkifyRequest;
   resultsPath?: string;
   deleteFiles?: boolean;
   debug?: boolean;
+  /** Show a terminal spinner while polling. On by default */
+  spinner?: boolean;
+}
+
+export type BulkOperationStatus =
+  | "CANCELED"
+  | "CANCELING"
+  | "COMPLETED"
+  | "CREATED"
+  | "EXPIRED"
+  | "FAILED"
+  | "RUNNING";
+
+export type BulkOperation = {
+  id: string;
+  status: BulkOperationStatus;
+  errorCode?: string | null;
+  createdAt?: string | null;
+  completedAt?: string | null;
+  objectCount?: string | number | null;
+  fileSize?: string | number | null;
+  url?: string | null;
+  partialDataUrl?: string | null;
+};
+
+export type BulkUserError = {
+  field?: string[] | string | null;
+  message: string;
+  code?: string | null;
+};
+
+/** Shopify refused to start the operation */
+export class BulkifyUserError extends Error {
+  constructor(public userErrors: BulkUserError[]) {
+    super(userErrors.map((error) => error.message).join("; "));
+    this.name = "BulkifyUserError";
+  }
+
+  /** True when another bulk operation is still running on the store */
+  get inProgress() {
+    return this.userErrors.some(
+      (error) => error.code === "OPERATION_IN_PROGRESS",
+    );
+  }
+}
+
+/** The operation finished without completing */
+export class BulkifyOperationError extends Error {
+  constructor(public operation: BulkOperation) {
+    super(
+      `Bulk operation ${operation.status.toLowerCase()}${operation.errorCode ? ` (${operation.errorCode})` : ""}`,
+    );
+    this.name = "BulkifyOperationError";
+  }
 }
 
 type BullkOperationResponse = {
@@ -49,20 +130,177 @@ type StagedUploadsCreateResponse = {
   };
 };
 
+export const RUN_BULK_QUERY = `
+  mutation BulkifyRunQuery($query: String!, $groupObjects: Boolean) {
+    bulkOperationRunQuery(query: $query, groupObjects: $groupObjects) {
+      bulkOperation {
+        id
+        status
+      }
+      userErrors {
+        code
+        field
+        message
+      }
+    }
+  }
+`;
+
+export const GET_BULK_OPERATION = `
+  query BulkifyOperation($id: ID!) {
+    bulkOperation(id: $id) {
+      id
+      status
+      errorCode
+      createdAt
+      completedAt
+      objectCount
+      fileSize
+      url
+      partialDataUrl
+    }
+  }
+`;
+
+const FINISHED: BulkOperationStatus[] = [
+  "CANCELED",
+  "COMPLETED",
+  "EXPIRED",
+  "FAILED",
+];
+
 export default class Bulkify {
-  client: GraphqlClient | AdminApiClient;
+  client?: GraphqlRequestClient;
   resultsPath: string;
+  private requestFn?: BulkifyRequest;
   private deleteFiles: boolean;
   private debug?: boolean;
+  private spinner: boolean;
 
   constructor(options: BulkifyOptions) {
+    if (!options.client && !options.request) {
+      throw new Error("Bulkify needs a client or a request function");
+    }
     this.client = options.client;
+    this.requestFn = options.request;
     this.resultsPath =
       options.resultsPath || path.resolve(__dirname, "results");
     this.deleteFiles =
       options.deleteFiles === undefined ? true : options.deleteFiles;
     this.debug = options.debug;
+    this.spinner = options.spinner ?? true;
   }
+
+  /** Sends one operation through whichever client was given */
+  private async run<T>(
+    query: string,
+    variables?: Record<string, unknown>,
+  ): Promise<ClientResponse<T>> {
+    if (this.requestFn) {
+      return { data: await this.requestFn<T>(query, variables) };
+    }
+    return this.client!.request<T>(
+      query,
+      variables ? { variables } : undefined,
+    );
+  }
+
+  /** Runs an operation and returns `data`, throwing on GraphQL errors */
+  private async data<T>(query: string, variables?: Record<string, unknown>) {
+    const { data, errors } = await this.run<T>(query, variables);
+    if (errors && (!Array.isArray(errors) || errors.length > 0)) {
+      throw new Error(`GraphQL error: ${JSON.stringify(errors)}`);
+    }
+    if (!data) {
+      throw new Error("No data returned");
+    }
+    return data;
+  }
+
+  // Operations by id. These don't depend on currentBulkOperation, which is
+  // deprecated, and work while several operations run on one store.
+
+  /** Starts a bulk query and returns the operation. Doesn't wait for it */
+  async startBulkQuery(
+    query: string,
+    options: { groupObjects?: boolean } = {},
+  ): Promise<{ id: string; status: BulkOperationStatus }> {
+    if (this.debug) console.log(query);
+    const data = await this.data<{
+      bulkOperationRunQuery: {
+        bulkOperation: { id: string; status: BulkOperationStatus } | null;
+        userErrors: BulkUserError[];
+      };
+    }>(RUN_BULK_QUERY, {
+      query,
+      groupObjects: options.groupObjects ?? null,
+    });
+    const { bulkOperation, userErrors } = data.bulkOperationRunQuery;
+    if (userErrors.length > 0 || !bulkOperation) {
+      throw new BulkifyUserError(
+        userErrors.length > 0
+          ? userErrors
+          : [{ message: "No bulk operation was returned" }],
+      );
+    }
+    return bulkOperation;
+  }
+
+  /** The operation's current state, or null if Shopify doesn't know it */
+  async getBulkOperation(id: string): Promise<BulkOperation | null> {
+    const data = await this.data<{ bulkOperation: BulkOperation | null }>(
+      GET_BULK_OPERATION,
+      { id },
+    );
+    return data.bulkOperation;
+  }
+
+  /**
+   * Polls until the operation finishes. Resolves with it when completed and
+   * throws BulkifyOperationError when it failed, was cancelled or expired.
+   */
+  async waitForBulkOperation(
+    id: string,
+    { pollingTime = 2000, signal }: { pollingTime?: number; signal?: AbortSignal } = {},
+  ): Promise<BulkOperation> {
+    for (;;) {
+      signal?.throwIfAborted();
+      const operation = await this.getBulkOperation(id);
+      if (!operation) {
+        throw new Error(`Bulk operation ${id} not found`);
+      }
+      if (operation.status === "COMPLETED") return operation;
+      if (FINISHED.includes(operation.status)) {
+        throw new BulkifyOperationError(operation);
+      }
+      await wait(pollingTime);
+    }
+  }
+
+  /**
+   * Streams a results file line by line without saving it to disk. Each line
+   * is parsed as JSON. Shopify returns no URL when there were no results, so
+   * a missing URL yields nothing.
+   */
+  async *streamURL<T>(
+    url: string | null | undefined,
+    fetchFn: typeof fetch = fetch,
+  ): AsyncGenerator<T> {
+    if (!url) return;
+    const response = await fetchFn(url);
+    if (!response.ok || !response.body) {
+      throw new Error(`Couldn't download results (${response.status})`);
+    }
+    const lines = createInterface({
+      input: stream.Readable.fromWeb(response.body as any),
+      crlfDelay: Infinity,
+    });
+    for await (const line of lines) {
+      if (line) yield JSON.parse(line) as T;
+    }
+  }
+
+  // The original API, unchanged
 
   async createBulkQuery(query: string): Promise<
     ClientResponse<{
@@ -90,22 +328,14 @@ export default class Bulkify {
       console.log(BULK_QUERY);
     }
 
-    if (this.client instanceof GraphqlClient) {
-      const result = await this.client.request<{
-        bulkOperationRunQuery: BullkOperationResponse;
-      }>(BULK_QUERY);
-      return result;
-    } else {
-      const result = await this.client.request<{
-        bulkOperationRunQuery: BullkOperationResponse;
-      }>(BULK_QUERY);
-      return result;
-    }
+    return this.run<{ bulkOperationRunQuery: BullkOperationResponse }>(
+      BULK_QUERY,
+    );
   }
 
   async createBulkMutation(
     mutation: string,
-    stagedUploadPath: string
+    stagedUploadPath: string,
   ): Promise<
     ClientResponse<{
       bulkOperationRunMutation: BullkOperationResponse;
@@ -131,19 +361,15 @@ export default class Bulkify {
       console.log(BULK_MUTATION);
     }
 
-    if (this.client instanceof GraphqlClient) {
-      const result = await this.client.request<{
-        bulkOperationRunMutation: BullkOperationResponse;
-      }>(BULK_MUTATION);
-      return result;
-    } else {
-      const result = await this.client.request<{
-        bulkOperationRunMutation: BullkOperationResponse;
-      }>(BULK_MUTATION);
-      return result;
-    }
+    return this.run<{ bulkOperationRunMutation: BullkOperationResponse }>(
+      BULK_MUTATION,
+    );
   }
 
+  /**
+   * @deprecated `currentBulkOperation` is deprecated by Shopify. Use
+   * `getBulkOperation(id)` instead.
+   */
   async getBulkOperationStatus(type: "QUERY" | "MUTATION"): Promise<
     ClientResponse<{
       currentBulkOperation: {
@@ -173,37 +399,7 @@ export default class Bulkify {
       }
     }`;
 
-    if (this.client instanceof GraphqlClient) {
-      const result = await this.client.request<{
-        currentBulkOperation: {
-          id: string;
-          status: string;
-          errorCode: string;
-          createdAt: string;
-          completedAt: string;
-          objectCount: number;
-          fileSize: number;
-          url: string;
-          partialDataUrl: string;
-        };
-      }>(BULK_QUERY_STATUS);
-      return result;
-    } else {
-      const result = await this.client.request<{
-        currentBulkOperation: {
-          id: string;
-          status: string;
-          errorCode: string;
-          createdAt: string;
-          completedAt: string;
-          objectCount: number;
-          fileSize: number;
-          url: string;
-          partialDataUrl: string;
-        };
-      }>(BULK_QUERY_STATUS);
-      return result;
-    }
+    return this.run(BULK_QUERY_STATUS);
   }
 
   async cancelBulkOperation(id: string) {
@@ -211,7 +407,6 @@ export default class Bulkify {
       mutation bulkOperationCancel($id: ID!) {
         bulkOperationCancel(id: $id) {
           bulkOperation {
-            # BulkOperation fields
             id
             status
           }
@@ -223,34 +418,10 @@ export default class Bulkify {
       }
     `;
 
-    if (this.client instanceof GraphqlClient) {
-      const result = await this.client.request<{
-        bulkOperationCancel: {
-          bulkOperation: {
-            id: string;
-            status: string;
-          };
-          userErrors: {
-            field: string;
-            message: string;
-          }[];
-        };
-      }>(CANCEL_BULK_OPERATION, {
-        variables: {
-          id,
-        },
-      });
-      return result;
-    } else {
-      const result = await this.client.request<{
-        bulkOperationCancel: BullkOperationResponse;
-      }>(CANCEL_BULK_OPERATION, {
-        variables: {
-          id,
-        },
-      });
-      return result;
-    }
+    return this.run<{ bulkOperationCancel: BullkOperationResponse }>(
+      CANCEL_BULK_OPERATION,
+      { id },
+    );
   }
 
   async cancelCurrentBulkOperation(type: "QUERY" | "MUTATION") {
@@ -265,11 +436,15 @@ export default class Bulkify {
     return this.cancelBulkOperation(id);
   }
 
+  private startSpinner(text: string): Ora | undefined {
+    return this.spinner ? ora(text).start() : undefined;
+  }
+
   async pollCurrentOperation(
     type: "QUERY" | "MUTATION" = "QUERY",
-    pollingTime: number = 2000
+    pollingTime: number = 2000,
   ) {
-    const spinner = ora("Polling current operation").start();
+    const spinner = this.startSpinner("Polling current operation");
     let isRunning = true;
     let jsonURL = "";
     let bulkObjects = 0;
@@ -287,7 +462,7 @@ export default class Bulkify {
         console.log(result.data.currentBulkOperation);
       }
 
-      spinner.text = `Polling current operation: ${status}`;
+      if (spinner) spinner.text = `Polling current operation: ${status}`;
 
       if (status === "COMPLETED") {
         isRunning = false;
@@ -296,9 +471,9 @@ export default class Bulkify {
         status === "EXPIRED" ||
         status === "CANCELED"
       ) {
-        spinner.fail("Bulk operation failed");
+        spinner?.fail("Bulk operation failed");
         throw new Error(
-          `Bulk operation failed with status: ${status} and error code: ${errorCode}`
+          `Bulk operation failed with status: ${status} and error code: ${errorCode}`,
         );
       }
 
@@ -310,7 +485,7 @@ export default class Bulkify {
       }
     } while (isRunning);
 
-    spinner.succeed("Bulk operation completed");
+    spinner?.succeed("Bulk operation completed");
     return { jsonURL, bulkObjects };
   }
 
@@ -329,7 +504,7 @@ export default class Bulkify {
 
     const fileName = path.join(
       this.resultsPath,
-      `bulk-operation-${new Date().toISOString()}.json`
+      `bulk-operation-${new Date().toISOString()}.json`,
     );
 
     const writeStream = fs.createWriteStream(fileName);
@@ -338,7 +513,7 @@ export default class Bulkify {
       throw new Error("No body found in response");
     }
 
-    stream.Readable.fromWeb(res.body).pipe(writeStream);
+    stream.Readable.fromWeb(res.body as any).pipe(writeStream);
 
     return new Promise<string>((resolve, reject) => {
       writeStream.on("finish", () => {
@@ -361,7 +536,7 @@ export default class Bulkify {
 
   private async getInterfaceFromURL(jsonURL: string) {
     const file = await this.writeResultsToFile(jsonURL);
-    console.log(`Bulk operation results written to: ${file}`);
+    if (this.debug) console.log(`Bulk operation results written to: ${file}`);
 
     const readStream = createReadStream(file, { encoding: "utf8" });
     const rl = createInterface({
@@ -383,12 +558,14 @@ export default class Bulkify {
   }
 
   private async getReadInterfaceFromCurrentOperation<T>(
-    type: "QUERY" | "MUTATION" = "QUERY"
+    type: "QUERY" | "MUTATION" = "QUERY",
   ) {
     const { jsonURL, bulkObjects } = await this.pollCurrentOperation(type);
 
-    console.log("Bulk objects found:", bulkObjects);
-    console.log("JSON URL:", jsonURL);
+    if (this.debug) {
+      console.log("Bulk objects found:", bulkObjects);
+      console.log("JSON URL:", jsonURL);
+    }
 
     if (bulkObjects === 0) {
       throw new Error("No bulk objects found");
@@ -420,7 +597,7 @@ export default class Bulkify {
 
   private async bulkMutation(mutation: string, filePath: string) {
     const key = await this.uploadBulkJSONL(filePath);
-    console.log("Bulk mutation key:", key);
+    if (this.debug) console.log("Bulk mutation key:", key);
     const { data } = await this.createBulkMutation(mutation, key);
 
     if (!data) {
@@ -439,9 +616,8 @@ export default class Bulkify {
 
   private async rawBulkMutation<T>(mutation: string, filePath: string) {
     const bulkOperation = await this.bulkMutation(mutation, filePath);
-    const generator = await this.getReadInterfaceFromCurrentOperation<T>(
-      "MUTATION"
-    );
+    const generator =
+      await this.getReadInterfaceFromCurrentOperation<T>("MUTATION");
     return { generator, bulkOperation };
   }
 
@@ -481,17 +657,8 @@ export default class Bulkify {
       }
     }`;
 
-    let response: ClientResponse<StagedUploadsCreateResponse>;
-
-    if (this.client instanceof GraphqlClient) {
-      response = await this.client.request<StagedUploadsCreateResponse>(
-        STAGED_UPLOADS_CREATE
-      );
-    } else {
-      response = await this.client.request<StagedUploadsCreateResponse>(
-        STAGED_UPLOADS_CREATE
-      );
-    }
+    const response =
+      await this.run<StagedUploadsCreateResponse>(STAGED_UPLOADS_CREATE);
 
     if (!response.data) {
       throw new Error("No data found in response");

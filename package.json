@@ -1,9 +1,9 @@
 {
   "name": "@kampfire/bulkify",
-  "version": "1.8.6",
+  "version": "1.9.0",
   "description": "For handling bulk operations in Shopify",
   "main": "dist/index.js",
-  "typings": "dist/index.d.ts",
+  "typings": "./dist/index.d.ts",
   "files": [
     "dist/**/*.js",
     "dist/**/*.d.ts"
@@ -17,32 +17,35 @@
   "scripts": {
     "build": "rimraf dist && tsc",
     "dev": "tsc -w",
-    "test": "vitest",
+    "test": "vitest run",
     "script": "tsx ./src/tests/script.ts",
     "example:nested": "tsx ./src/examples/nested-objects.ts",
+    "typecheck": "tsc --noEmit"
     "npm:publish": "pnpm build && npm publish"
   },
   "author": "Matt Oskamp",
   "license": "ISC",
   "devDependencies": {
-    "@types/node": "^20.11.14",
-    "dotenv": "^16.4.1",
-    "rimraf": "^5.0.5",
-    "tsx": "^4.7.0",
-    "typescript": "^5.3.3",
-    "vitest": "^1.5.3"
+    "@shopify/admin-api-client": "^1.1.1",
+    "@shopify/shopify-api": "^14.0.0",
+    "@types/node": "^22.19.0",
+    "dotenv": "^16.6.1",
+    "rimraf": "^6.0.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.8"
   },
   "dependencies": {
-    "@shopify/admin-api-client": "^1.0.4",
-    "@shopify/graphql-client": "^0.9.3",
-    "@shopify/shopify-api": "^11.6.0",
-    "fast-xml-parser": "^4.3.4",
-    "ora": "^8.0.1"
+    "fast-xml-parser": "^4.5.3",
+    "ora": "^8.2.0"
   },
-  "types": "./dist/src/index.d.ts",
+  "types": "./dist/index.d.ts",
   "keywords": [
     "shopify",
     "bulk",
     "operations"
-  ]
+  ],
+  "engines": {
+    "node": ">=20"
+  }
 }
