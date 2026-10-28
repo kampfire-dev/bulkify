@@ -1,6 +1,6 @@
 {
   "name": "@kampfire/bulkify",
-  "version": "1.9.0",
+  "version": "2.0.0",
   "description": "For handling bulk operations in Shopify",
   "main": "dist/index.js",
   "typings": "./dist/index.d.ts",
@@ -17,26 +17,32 @@
   "scripts": {
     "build": "rimraf dist && tsc",
     "dev": "tsc -w",
-    "test": "vitest run",
-    "script": "tsx ./src/tests/script.ts",
+    "test": "vitest run --project unit",
     "example:nested": "tsx ./src/examples/nested-objects.ts",
-    "typecheck": "tsc --noEmit"
-    "npm:publish": "pnpm build && npm publish"
+    "typecheck": "tsc --noEmit",
+    "npm:publish": "npm publish",
+    "codegen": "graphql-codegen --config codegen.ts",
+    "test:store": "vitest run --project store",
+    "codegen:check": "graphql-codegen --config codegen.ts --check",
+    "prepublishOnly": "pnpm typecheck && pnpm test && pnpm build"
   },
   "author": "Matt Oskamp",
   "license": "ISC",
   "devDependencies": {
+    "@graphql-codegen/add": "^7.1.1",
+    "@graphql-codegen/cli": "^7.4.6",
+    "@graphql-codegen/typescript-operations": "^6.2.0",
     "@shopify/admin-api-client": "^1.1.1",
     "@shopify/shopify-api": "^14.0.0",
     "@types/node": "^22.19.0",
     "dotenv": "^16.6.1",
+    "graphql": "^16.14.2",
     "rimraf": "^6.0.1",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "vitest": "^4.1.8"
   },
   "dependencies": {
-    "fast-xml-parser": "^4.5.3",
     "ora": "^8.2.0"
   },
   "types": "./dist/index.d.ts",
@@ -46,6 +52,7 @@
     "operations"
   ],
   "engines": {
-    "node": ">=20"
-  }
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.12.0"
 }
