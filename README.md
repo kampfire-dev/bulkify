@@ -259,7 +259,7 @@ Issues and pull requests are welcome.
 
 ## License
 
-ISC
+[ISC](LICENSE) © Kampfire.dev Inc.
 
 ## Author
 
