@@ -1,0 +1,82 @@
+name: Scheduled checks
+
+# Checks against Shopify itself, so they run on a schedule instead of on every
+# pull request. Run them by hand before publishing (Actions > Run workflow).
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Mondays 09:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  # Real bulk operations on the CI dev store
+  store:
+    runs-on: ubuntu-latest
+    environment: shopify-store
+    timeout-minutes: 20
+    # One run at a time, so runs don't compete for the store
+    concurrency:
+      group: shopify-store
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:store
+        env:
+          SHOPIFY_STORE: ${{ vars.SHOPIFY_STORE }}
+          SHOPIFY_API_KEY: ${{ secrets.SHOPIFY_API_KEY }}
+          SHOPIFY_API_SECRET: ${{ secrets.SHOPIFY_API_SECRET }}
+
+  # Fails if Bulkify's queries break, or their types change, in the next API
+  # version. No store needed.
+  next-api-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Work out the next API version
+        id: version
+        run: |
+          current=$(grep -oE 'ADMIN_API_VERSION = "[0-9]{4}-[0-9]{2}"' codegen.ts | grep -oE '[0-9]{4}-[0-9]{2}')
+          year=${current%-*}
+          month=$((10#${current#*-} + 3))
+          if [ "$month" -gt 12 ]; then month=$((month - 12)); year=$((year + 1)); fi
+          next=$(printf "%d-%02d" "$year" "$month")
+          echo "Current $current, next $next"
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+      - run: pnpm codegen
+        env:
+          SHOPIFY_API_VERSION: ${{ steps.version.outputs.next }}
+      # The header line names the version, so ignore it
+      - run: git diff --exit-code -I '^// Admin API' src/generated
+
+  report:
+    needs: [store, next-api-version]
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open an issue unless one is already open
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Scheduled Shopify checks failed"
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title \"$title\"" --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "Failed again: $RUN_URL"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "See $RUN_URL"
+          fi

@@ -1,148 +1,255 @@
 # Bulkify
 
-**Bulkify** is a lightweight, efficient Node.js package specifically crafted to manage bulk operations within Shopify stores using Shopify's GraphQL API. It is designed with modern JavaScript and TypeScript in mind, providing strong typing and intelligent autocompletion that enhance developer productivity and code quality.
+**Bulkify** runs Shopify [bulk operations](https://shopify.dev/docs/api/usage/bulk-operations/queries) from Node.js. It starts the operation, waits for it to finish and streams the results back one line at a time, so large exports and imports don't have to fit in memory.
 
-## Key Features
+- **Streams results** with async generators
+- **Bulk queries and bulk mutations**, including uploading the JSONL file for mutations
+- **Works with any client**: Shopify's GraphQL clients, or your own request function (for example one that handles rate limits)
+- **Background jobs**: start an operation, then check on it or read its results later by id
+- **Typed**, with types generated from Shopify's Admin schema
 
-- **Streaming First**: Uses async generators to stream results, allowing you to process data as it arrives. This is especially useful for large datasets and memory efficiency.
-- **Efficient Bulk Operations**: Supports both bulk queries and mutations to handle large datasets efficiently.
-- **TypeScript Support**: Fully compatible with TypeScript for enhanced development experience.
-- **Lightweight Design**: Minimal dependencies ensure that the package is lightweight and fast.
-- **Error Handling**: Robust error handling capabilities to manage and retry failed operations seamlessly.
+## Upgrading to 2.0
+
+2.0 needs Admin API 2026-01 or newer and Node.js 22 or newer, and removes the
+methods that worked with "the newest operation of a type". See the
+[changelog](CHANGELOG.md#200) for everything that changed and what to use
+instead.
+
+## Requirements
+
+- Node.js 22 or newer
+- Shopify Admin API **2026-01 or newer**. Bulkify follows operations by id with `bulkOperation(id:)`, which Shopify added in 2026-01
 
 ## Installation
-
-You can install Bulkify using your preferred package manager.
 
 ```bash
 npm install @kampfire/bulkify
 ```
 
-## Background jobs (1.9)
-
-For servers and workers that shouldn't block while an operation runs, pass
-your own request function and work with operations by id. These don't use
-`currentBulkOperation`, which Shopify has deprecated.
+## Quick start
 
 ```ts
-import Bulkify, { BulkifyUserError } from "@kampfire/bulkify";
+import { createAdminApiClient } from "@shopify/admin-api-client";
+import Bulkify from "@kampfire/bulkify";
 
-// Resolves to `data` and throws on GraphQL errors, e.g. your throttled client
+const client = createAdminApiClient({
+  storeDomain: "your-store.myshopify.com",
+  accessToken: process.env.API_ACCESS_TOKEN!,
+  apiVersion: "2026-10",
+});
+
+const bulkify = new Bulkify({ client, spinner: true });
+
+const { generator } = await bulkify.runBulkQuery<{ id: string; title: string }>(`{
+  products(query: "tag:sale") {
+    edges {
+      node {
+        id
+        title
+      }
+    }
+  }
+}`);
+
+for await (const product of generator) {
+  console.log(product.id, product.title);
+}
+```
+
+The `GraphqlClient` from `@shopify/shopify-api` works too:
+
+```ts
+const client = new shopify.clients.Graphql({ session });
+const bulkify = new Bulkify({ client });
+```
+
+## Bulk mutations
+
+Write one line of variables per call to a JSONL file, then pass the mutation
+and the file. Bulkify uploads the file, runs the mutation and streams back one
+result per line.
+
+```ts
+import fs from "node:fs/promises";
+
+const products = [
+  { id: "gid://shopify/Product/1", title: "New title" },
+  { id: "gid://shopify/Product/2", title: "Another title" },
+];
+await fs.writeFile(
+  "products.jsonl",
+  products.map((product) => JSON.stringify({ product })).join("\n"),
+);
+
+const { generator } = await bulkify.runBulkMutation(
+  `mutation call($product: ProductUpdateInput!) {
+    productUpdate(product: $product) {
+      product { id title }
+      userErrors { field message }
+    }
+  }`,
+  "products.jsonl",
+);
+
+for await (const result of generator) {
+  console.log(result);
+}
+```
+
+## Background jobs
+
+For servers and workers that shouldn't block while an operation runs, start
+it, keep its id and come back to it later, for example when the
+`bulk_operations/finish` webhook arrives. `streamURL` reads the results
+straight from Shopify without writing a file.
+
+```ts
+import { BulkifyUserError } from "@kampfire/bulkify";
+
+let id: string;
+try {
+  ({ id } = await bulkify.startBulkQuery(`{ orders { edges { node { id } } } }`));
+  // save the id somewhere
+} catch (error) {
+  if (error instanceof BulkifyUserError && error.inProgress) {
+    // another bulk operation is running, try again later
+  }
+  throw error;
+}
+
+// Later
+const operation = await bulkify.getBulkOperation(id);
+if (operation?.status === "COMPLETED") {
+  for await (const order of bulkify.streamURL(operation.url)) {
+    // one parsed line at a time
+  }
+}
+
+// Or wait in place
+const done = await bulkify.waitForBulkOperation(id, { pollingTime: 5000 });
+```
+
+## Using your own client
+
+Pass `request` instead of `client` to send Bulkify's GraphQL calls through
+your own code. The function gets the query and variables, and should resolve
+to the response's `data` and throw on GraphQL errors.
+
+This is useful when your app already has a client that handles Shopify's rate
+limits. Bulkify checks on operations every few seconds, and those calls share
+the store's rate limit with the rest of your app. Going through your client
+means they wait and retry when throttled instead of failing.
+
+```ts
 const bulkify = new Bulkify({
   request: (query, variables) => myClient.request(query, { variables }),
   spinner: false,
 });
-
-const { id } = await bulkify.startBulkQuery(`{ orders { edges { node { id } } } }`);
-
-// Later, or from a webhook
-const operation = await bulkify.getBulkOperation(id);
-if (operation?.status === "COMPLETED") {
-  for await (const line of bulkify.streamURL(operation.url)) {
-    // one parsed JSONL line at a time, nothing written to disk
-  }
-}
-
-// Or wait for it
-await bulkify.waitForBulkOperation(id, { pollingTime: 5000 });
 ```
 
-`startBulkQuery` throws `BulkifyUserError`; its `inProgress` is true when
-another bulk operation is running on the store.
+## API reference
 
-## Usage
+### `new Bulkify(options)`
 
-Here's a quick start guide to using Bulkify in your project:
+| Option        | Description                                                                                                                        |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `client`      | A Shopify GraphQL client: anything with `request(query, { variables })` that returns `{ data, errors }`.                           |
+| `request`     | A function `(query, variables) => Promise<data>`, used instead of `client`. See [Using your own client](#using-your-own-client).    |
+| `resultsPath` | Folder where `runBulkQuery`, `runBulkMutation` and `processURL` download results before reading them. Defaults to a `bulkify` folder in the system temp directory. |
+| `deleteFiles` | Delete downloaded result files once they've been read. Defaults to `true`.                                                         |
+| `spinner`     | Show a terminal spinner while `runBulkQuery` and `runBulkMutation` wait. Defaults to `false`.                                      |
+| `debug`       | Log queries and operation details.                                                                                                 |
 
-```javascript
-import { ApiVersion, shopifyApi } from "@shopify/shopify-api";
-import "dotenv/config";
-import Bulkify from "@kampfire/bulkify";
+One of `client` or `request` is required.
 
-async function run() {
-  // Use the standard Shopify API client to create a session
-  const shopify = shopifyApi({
-    adminApiAccessToken: process.env.API_ACCESS_TOKEN,
-    apiVersion: ApiVersion.January24,
-    hostName: process.env.SHOP_NAME,
-  });
+### Run and read
 
-  const session = shopify.session.customAppSession(process.env.SHOP_NAME);
-  const client = new shopify.clients.Graphql({ session });
-  const bulkify = new Bulkify({
-    client,
-  });
+- **`runBulkQuery<T>(query)`**: starts a bulk query, waits for it and returns `{ generator, bulkOperation }`. `generator` yields one parsed line of type `T` at a time.
+- **`runBulkMutation<T>(mutation, filePath)`**: uploads the JSONL file at `filePath`, runs the mutation, waits for it and returns `{ generator, bulkOperation }`.
 
-  // Example of a bulk query
-  const query = `
-  {
-    productVariants(query:"tag:test") {
-      edges {
-        node {
-          id
-          sku
-          price
-        }
-      }
-    }
-  }`;
+### By id
 
-  const { generator } = await bulkify.runBulkQuery(query);
-  for await (const variant of generator) {
-    console.log(variant);
-  }
-}
+- **`startBulkQuery(query, { groupObjects? })`**: starts a bulk query and returns `{ id, status }` without waiting.
+- **`getBulkOperation(id)`**: the operation's current state, or `null` if Shopify doesn't know it.
+- **`waitForBulkOperation(id, { pollingTime?, signal? })`**: checks every `pollingTime` ms (default 2000) until the operation finishes. Resolves with the operation when it completes. Throws `BulkifyOperationError` if it failed, was canceled or expired. `signal` is an `AbortSignal` to stop waiting.
+- **`streamURL<T>(url)`**: streams a results file line by line without saving it. Yields nothing when `url` is empty, which is what Shopify returns when there were no results.
+- **`cancelBulkOperation(id)`**: cancels an operation.
 
-run();
-```
+### Other methods
 
-## API Reference
+- **`processURL<T>(url)`**: like `streamURL`, but downloads the file to `resultsPath` first.
+- **`uploadBulkJSONL(filePath)`**: uploads a JSONL file for a bulk mutation and returns its `stagedUploadPath`.
 
-These are the main functions and classes provided by Bulkify, however there are additional functions and classes available for more advanced use cases.
+### Errors
 
-### `Bulkify(options)`
+- **`BulkifyUserError`**: Shopify refused to start the operation. `userErrors` holds Shopify's errors, and `inProgress` is `true` when the refusal was because other operations are running (one in progress, or the limit of concurrent operations reached). Try again later.
+- **`BulkifyOperationError`**: the operation finished without completing. `operation` holds its final state, including `status` and `errorCode`.
 
-- **options.client**: A configured Shopify GraphQL client instance.
-- **options.resultsPath** (optional): The path where results should be stored. Defaults to "./results".
-- **options.deleteFiles** (optional): Boolean flag to determine if result files should be deleted after processing. Defaults to `true`.
+## Things to know
 
-### `runBulkQuery(query)`
-
-- **query**: The GraphQL query string.
-- Returns an async generator yielding query results.
-
-### `runBulkMutation(mutation, filePath)`
-
-- **mutation**: The GraphQL mutation string.
-- **filePath**: Path to the JSONL file containing data for mutations.
-- Returns an async generator yielding mutation results.
-
-### `processURL(url)`
-
-- Useful for processing a URL returned from a bulk operation (like from a webhook).
-- **url**: The URL of the resulting JSONL file.
-- Returns an async generator yielding the results of the bulk operation.
+- **Concurrent operations.** From API 2026-01, each app can run up to five bulk operations of each type (queries, mutations) per store at once. Before that it was one.
+- **Nested results.** Connections inside a bulk query come back as separate lines after their parent, each with a `__parentId`. To rebuild the nesting, collect the child lines until the next parent arrives. [`nested-objects.ts`](https://github.com/kampfire-dev/bulkify/tree/main/src/examples/nested-objects.ts) shows one way, using `__typename` to tell the lines apart.
+- **No results.** When a query matches nothing, the generator yields nothing.
+- **Result links expire.** Download results soon after an operation completes.
 
 ## Examples
 
-You can find more examples, such as how to do a bulk query and mutation in a couple lines of code to change prices, in the [examples](https://github.com/kampfire-dev/bulkify/tree/main/examples) directory.
+More examples are in [`src/examples`](https://github.com/kampfire-dev/bulkify/tree/main/src/examples).
 
-## Gotchas
+## Shopify docs
 
-- **You can only have a single bulk operation of each type running per store / app.**
-- **Nested Queries**: When using nested queries, the objects will appear after one another in the returned JSONL. To handle this, you should store the accumulated nested objects in an array and process them once you get to another parent object. See the [examples](https://github.com/kampfire-dev/bulkify/tree/main/examples) for more details.
+- [Bulk queries](https://shopify.dev/docs/api/usage/bulk-operations/queries)
+- [Bulk mutations (imports)](https://shopify.dev/docs/api/usage/bulk-operations/imports)
+- [`BulkOperation` object](https://shopify.dev/docs/api/admin-graphql/latest/objects/BulkOperation)
 
-## Documentation
+## Development
 
-Check out the official shopify docs on [GraphQL](https://shopify.dev/docs/api/admin-graphql) and [Bulk Operations](https://shopify.dev/docs/api/admin-graphql/2024-04/objects/BulkOperation).
+Types for the GraphQL operations in `src/index.ts` (strings marked
+`/* graphql */`) are generated from Shopify's Admin schema into
+`src/generated/admin.ts`. After changing an operation, or the API version in
+`codegen.ts`, run:
+
+```sh
+pnpm codegen
+```
+
+Other scripts:
+
+- `pnpm test`: unit tests, no store needed
+- `pnpm test:store`: runs real bulk operations on a dev store (see below)
+- `pnpm codegen:check`: fails if `src/generated` is out of date
+
+CI runs typecheck, tests, build and `codegen:check` on every push and pull
+request. Publishing runs typecheck, tests and build first.
+
+### Store test
+
+`pnpm test:store` creates a few draft products on a dev store, reads and
+updates them with bulk operations, then deletes them. Use an empty dev store
+for it.
+
+1. Link the app in `ci-app/` to a Dev Dashboard app (`shopify app config link`
+   from that folder), release its scopes with `shopify app deploy`, and install
+   it on the dev store.
+2. Run `shopify app env pull` in `ci-app/`. It writes `ci-app/.env` with the
+   store and the app's client ID and secret, which the test reads. The test
+   gets a fresh access token each run.
+
+The scheduled workflow (`.github/workflows/scheduled.yml`) runs the store test
+every Monday and checks Bulkify's queries against the next Shopify API
+version. If either fails, it opens an issue. It needs a `shopify-store`
+environment in the repo settings with a `SHOPIFY_STORE` variable and
+`SHOPIFY_API_KEY` and `SHOPIFY_API_SECRET` secrets, with the values from
+`ci-app/.env`. Run it by hand from
+the Actions tab before publishing.
 
 ## Contributing
 
-If you're interested in contributing to the development of Bulkify, please submit an issue or pull request. We welcome contributions from the community and appreciate your feedback.
+Issues and pull requests are welcome.
 
 ## License
 
-Bulkify is available under the [ISC license](https://github.com/kampfire-dev/bulkify/blob/main/LICENSE).
+ISC
 
 ## Author
 

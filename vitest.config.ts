@@ -2,7 +2,18 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    // run.test.ts talks to a real store and needs a .env
-    include: ["src/tests/bulkify.test.ts"],
+    projects: [
+      {
+        test: { name: "unit", include: ["src/tests/bulkify.test.ts"] },
+      },
+      {
+        // Talks to a real store, see the file for setup
+        test: {
+          name: "store",
+          include: ["src/tests/store.test.ts"],
+          testTimeout: 5 * 60_000,
+        },
+      },
+    ],
   },
 });

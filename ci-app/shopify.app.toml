@@ -1,0 +1,16 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "b8ddabb842aedd3821f42f2dc8641494"
+application_url = "https://shopify.dev/apps/default-app-home"
+embedded = true
+name = "bulkify-test"
+
+[webhooks]
+api_version = "2027-01"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "write_products"
+
+[auth]
+redirect_urls = ["https://shopify.dev/apps/default-app-home/api/auth"]
