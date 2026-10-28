@@ -18,6 +18,38 @@ You can install Bulkify using your preferred package manager.
 npm install @kampfire/bulkify
 ```
 
+## Background jobs (1.9)
+
+For servers and workers that shouldn't block while an operation runs, pass
+your own request function and work with operations by id. These don't use
+`currentBulkOperation`, which Shopify has deprecated.
+
+```ts
+import Bulkify, { BulkifyUserError } from "@kampfire/bulkify";
+
+// Resolves to `data` and throws on GraphQL errors, e.g. your throttled client
+const bulkify = new Bulkify({
+  request: (query, variables) => myClient.request(query, { variables }),
+  spinner: false,
+});
+
+const { id } = await bulkify.startBulkQuery(`{ orders { edges { node { id } } } }`);
+
+// Later, or from a webhook
+const operation = await bulkify.getBulkOperation(id);
+if (operation?.status === "COMPLETED") {
+  for await (const line of bulkify.streamURL(operation.url)) {
+    // one parsed JSONL line at a time, nothing written to disk
+  }
+}
+
+// Or wait for it
+await bulkify.waitForBulkOperation(id, { pollingTime: 5000 });
+```
+
+`startBulkQuery` throws `BulkifyUserError`; its `inProgress` is true when
+another bulk operation is running on the store.
+
 ## Usage
 
 Here's a quick start guide to using Bulkify in your project:
