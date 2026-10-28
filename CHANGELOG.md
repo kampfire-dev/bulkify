@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.1.0
+
+### Added
+
+- `runBulkQuery` and `createBulkQuery` take `{ groupObjects }`, like
+  `startBulkQuery`. With `groupObjects: true`, each object's children come
+  right after it in the results. Shopify warns that grouping makes operations
+  slower and more likely to time out.
+- `BulkQueryOptions` type.
+
+### Fixed
+
+- The README said a child line always comes after its parent. That's only
+  true with `groupObjects: true`; by default the lines can come in any order.
+  The `nested-results.ts` example now handles any order. Before, it dropped
+  children that arrived before their parent.
+
 ## 2.0.0
 
 The first release since 1.8.6. These notes cover everything since then.

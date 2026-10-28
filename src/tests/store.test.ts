@@ -190,6 +190,30 @@ describe.skipIf(!hasCredentials)("store", () => {
     expect(ids).toEqual(created.map(({ id }) => id).sort());
   });
 
+  // Runs after "reads them with a bulk query", so search has caught up
+  it("puts children right after their parent with groupObjects", async () => {
+    const { generator } = await bulkify.runBulkQuery<{
+      id: string;
+      __parentId?: string;
+    }>(
+      `{
+        products(query: "tag:${RUN_TAG}") {
+          edges { node { id variants { edges { node { id } } } } }
+        }
+      }`,
+      { groupObjects: true },
+    );
+    const lines = await collect(generator);
+
+    let product: string | undefined;
+    for (const line of lines) {
+      if (line.__parentId) expect(line.__parentId).toBe(product);
+      else product = line.id;
+    }
+    expect(lines.filter((line) => !line.__parentId)).toHaveLength(PRODUCT_COUNT);
+    expect(lines.some((line) => line.__parentId)).toBe(true);
+  });
+
   it("starts, waits for and streams a bulk query by id", async () => {
     const products = await findAll(async () => {
       const { id } = await bulkify.startBulkQuery(productsQuery(RUN_TAG));

@@ -197,6 +197,18 @@ describe("runBulkQuery and runBulkMutation", () => {
     expect(request).toHaveBeenCalledTimes(2);
   });
 
+  it("sends groupObjects only when it's set", async () => {
+    const { request, bulkify } = withRequest([
+      started("bulkOperationRunQuery"),
+      { bulkOperation: { id: "mine", status: "COMPLETED", objectCount: "0", url: null } },
+    ]);
+    await bulkify.runBulkQuery("{ x }", { groupObjects: true });
+    expect(request).toHaveBeenNthCalledWith(1, RUN_BULK_QUERY, {
+      query: "{ x }",
+      groupObjects: true,
+    });
+  });
+
   it("throws Shopify's user errors", async () => {
     const { bulkify } = withRequest([
       {

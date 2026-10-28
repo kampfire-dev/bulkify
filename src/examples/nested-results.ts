@@ -2,8 +2,9 @@
 //
 // pnpm example:nested [tag]
 //
-// Bulk queries return nested connections as separate lines: each product,
-// then its variants, each variant with a __parentId pointing at its product.
+// Bulk queries return nested connections as separate lines: products, and
+// variants with a __parentId pointing at their product. The lines can come in
+// any order, so a variant may arrive before its product.
 import { bulkify } from "./setup.js";
 
 const tag = process.argv[2] ?? "bulkify-example";
@@ -37,17 +38,28 @@ const { generator } = await bulkify.runBulkQuery<ProductLine | VariantLine>(`{
   }
 }`);
 
-// Children always come after their parent, so the parent is already here.
-// For very large exports, process each product when the next one starts
-// instead of keeping them all.
 const products = new Map<string, Product>();
+// Variants whose product hasn't arrived yet
+const waiting = new Map<string, VariantLine[]>();
+
 for await (const line of generator) {
   if ("__parentId" in line) {
-    products.get(line.__parentId)?.variants.push(line);
+    const product = products.get(line.__parentId);
+    if (product) {
+      product.variants.push(line);
+    } else {
+      waiting.set(line.__parentId, [...(waiting.get(line.__parentId) ?? []), line]);
+    }
   } else {
-    products.set(line.id, { ...line, variants: [] });
+    products.set(line.id, { ...line, variants: waiting.get(line.id) ?? [] });
+    waiting.delete(line.id);
   }
 }
+
+// With runBulkQuery(query, { groupObjects: true }), each product's variants
+// come right after it instead, so you can handle each product as soon as the
+// next one starts. Shopify warns that grouping is slower and more likely to
+// time out.
 
 for (const product of products.values()) {
   console.log(product.title);
