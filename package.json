@@ -20,7 +20,7 @@
     "test": "vitest",
     "script": "tsx ./src/tests/script.ts",
     "example:nested": "tsx ./src/examples/nested-objects.ts",
-    "deploy": "pnpm build && npm publish"
+    "npm:publish": "pnpm build && npm publish"
   },
   "author": "Matt Oskamp",
   "license": "ISC",
