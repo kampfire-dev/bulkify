@@ -14,7 +14,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import Bulkify from "../index.js";
+import Bulkify, { type BulkLine } from "../index.js";
 
 dotenv.config({
   path: path.resolve(import.meta.dirname, "../../ci-app/.env"),
@@ -212,6 +212,23 @@ describe.skipIf(!hasCredentials)("store", () => {
     }
     expect(lines.filter((line) => !line.__parentId)).toHaveLength(PRODUCT_COUNT);
     expect(lines.some((line) => line.__parentId)).toBe(true);
+  });
+
+  // Shopify's codegen needs named queries marked #graphql
+  it("runs a named query written the way Shopify's codegen expects", async () => {
+    const { generator } = await bulkify.runBulkQuery<
+      BulkLine<{ products: { edges: { node: { id: string; title: string } }[] } }>
+    >(`#graphql
+      query BulkifyStoreTestProducts {
+        products(query: "tag:${RUN_TAG}") {
+          edges { node { id title } }
+        }
+      }
+    `);
+    const products = await collect(generator);
+    expect(products.map(({ id }) => id).sort()).toEqual(
+      created.map(({ id }) => id).sort(),
+    );
   });
 
   it("starts, waits for and streams a bulk query by id", async () => {

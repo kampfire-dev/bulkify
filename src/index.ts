@@ -24,6 +24,39 @@ import type {
 import { wait } from "./utils/index.js";
 
 export type { BulkOperationStatus };
+export type { BulkLine } from "./bulk-line.js";
+import type { BulkLine } from "./bulk-line.js";
+
+/**
+ * Query result types by query text, which `runBulkQuery` looks up to type its
+ * lines. Empty until you fill it, for example from Shopify's codegen
+ * (`@shopify/api-codegen-preset`):
+ *
+ * ```ts
+ * import type { AdminQueries } from "@shopify/admin-api-client";
+ *
+ * declare module "@kampfire/bulkify" {
+ *   interface BulkifyQueries extends AdminQueries {}
+ * }
+ * ```
+ *
+ * Entries need a `return` type: `{ [query: string]: { return: Result } }`.
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface BulkifyQueries {}
+
+/**
+ * The line type `runBulkQuery` yields for a query: `BulkLine` of its result
+ * type when `BulkifyQueries` knows the query, and `unknown` otherwise.
+ */
+export type BulkQueryLine<Q extends string> = Q extends keyof BulkifyQueries
+  ? BulkifyQueries[Q] extends { return: infer R }
+    ? // Shopify's AdminQueries maps unknown queries to `any`
+      0 extends 1 & R
+      ? unknown
+      : BulkLine<R>
+    : unknown
+  : unknown;
 
 
 /** The response shape of Shopify's GraphQL clients */
@@ -532,8 +565,20 @@ export default class Bulkify {
     return { generator, bulkOperation };
   }
 
-  runBulkQuery<T>(query: string, options?: BulkQueryOptions) {
-    return this.rawBulkQuery<T>(query, options);
+  /**
+   * Runs a bulk query and streams its results, one line at a time.
+   *
+   * The lines are typed as `T` when given. Otherwise they're typed from the
+   * query text through `BulkifyQueries`, or `unknown` if it isn't there.
+   */
+  runBulkQuery<T = never, Q extends string = string>(
+    query: Q,
+    options?: BulkQueryOptions,
+  ) {
+    return this.rawBulkQuery<[T] extends [never] ? BulkQueryLine<Q> : T>(
+      query,
+      options,
+    );
   }
 
   runBulkMutation<T>(mutation: string, filePath: string) {

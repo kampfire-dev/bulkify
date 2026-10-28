@@ -4,7 +4,10 @@ export default defineConfig({
   test: {
     projects: [
       {
-        test: { name: "unit", include: ["src/tests/bulkify.test.ts"] },
+        test: {
+          name: "unit",
+          include: ["src/tests/bulkify.test.ts", "src/tests/bulk-line.test.ts"],
+        },
       },
       {
         // Talks to a real store, see the file for setup

@@ -5,20 +5,34 @@
 // Bulk queries return nested connections as separate lines: products, and
 // variants with a __parentId pointing at their product. The lines can come in
 // any order, so a variant may arrive before its product.
+import type { BulkLine } from "../index.js"; // "@kampfire/bulkify"
 import { bulkify } from "./setup.js";
 
 const tag = process.argv[2] ?? "bulkify-example";
 
-type ProductLine = { id: string; title: string };
-type VariantLine = {
-  id: string;
-  title: string;
-  price: string;
-  __parentId: string;
+// The query's result type. In an app, Shopify's codegen generates this, and
+// for a query without ${...} the lines are typed automatically (see the
+// README's "Typed results").
+type ProductsQuery = {
+  products: {
+    edges: Array<{
+      node: {
+        id: string;
+        title: string;
+        variants: {
+          edges: Array<{ node: { id: string; title: string; price: string } }>;
+        };
+      };
+    }>;
+  };
 };
-type Product = ProductLine & { variants: VariantLine[] };
 
-const { generator } = await bulkify.runBulkQuery<ProductLine | VariantLine>(`{
+// Product lines, and variant lines with a __parentId
+type Line = BulkLine<ProductsQuery>;
+type VariantLine = Extract<Line, { __parentId: string }>;
+type Product = Exclude<Line, VariantLine> & { variants: VariantLine[] };
+
+const { generator } = await bulkify.runBulkQuery<Line>(`{
   products(query: "tag:${tag}") {
     edges {
       node {
@@ -43,7 +57,7 @@ const products = new Map<string, Product>();
 const waiting = new Map<string, VariantLine[]>();
 
 for await (const line of generator) {
-  if ("__parentId" in line) {
+  if (line.__parentId !== undefined) {
     const product = products.get(line.__parentId);
     if (product) {
       product.variants.push(line);

@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.2.0
+
+### Added
+
+- **Typed results.** `BulkLine<T>` turns a query's result type into the types
+  of its bulk result lines: one per connection node, without nested
+  connections, and with `__parentId` on nested nodes.
+- `runBulkQuery` types its lines from the query text when `BulkifyQueries`
+  knows the query. Extending it with Shopify's codegen types (`AdminQueries`)
+  takes one declaration; see "Typed results" in the README. Passing a type,
+  `runBulkQuery<T>(query)`, works as before.
+- `BulkifyQueries` and `BulkQueryLine` types.
+
 ## 2.1.0
 
 ### Added
