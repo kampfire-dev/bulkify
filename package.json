@@ -18,13 +18,14 @@
     "build": "rimraf dist && tsc",
     "dev": "tsc -w",
     "test": "vitest run --project unit",
-    "example:nested": "tsx ./src/examples/nested-objects.ts",
-    "typecheck": "tsc --noEmit",
+    "example:nested": "tsx ./src/examples/nested-results.ts",
+    "typecheck": "tsc -p tsconfig.check.json",
     "npm:publish": "npm publish",
     "codegen": "graphql-codegen --config codegen.ts",
     "test:store": "vitest run --project store",
     "codegen:check": "graphql-codegen --config codegen.ts --check",
-    "prepublishOnly": "pnpm typecheck && pnpm test && pnpm build"
+    "prepublishOnly": "pnpm typecheck && pnpm test && pnpm build",
+    "example:prices": "tsx ./src/examples/update-prices.ts"
   },
   "author": "Matt Oskamp",
   "license": "ISC",

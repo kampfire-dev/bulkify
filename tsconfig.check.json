@@ -1,0 +1,8 @@
+{
+  // Type-checks everything in src, including the tests and examples that the
+  // build leaves out
+  "extends": "./tsconfig.json",
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"],
+  "compilerOptions": { "noEmit": true }
+}

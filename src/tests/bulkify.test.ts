@@ -125,7 +125,8 @@ describe("streamURL", () => {
 describe("clients", () => {
   it("still accepts a Shopify GraphQL client", async () => {
     const client = {
-      request: vi.fn(async () => ({
+      // Like Shopify's clients, which resolve to whatever `data` the query asks for
+      request: vi.fn(async (): Promise<any> => ({
         data: { bulkOperation: { id: "op", status: "RUNNING" } },
       })),
     };
@@ -140,7 +141,9 @@ describe("clients", () => {
 
   it("throws GraphQL errors from a client", async () => {
     const client = {
-      request: vi.fn(async () => ({ errors: [{ message: "Access denied" }] })),
+      request: vi.fn(async (): Promise<any> => ({
+        errors: [{ message: "Access denied" }],
+      })),
     };
     const bulkify = new Bulkify({ client, spinner: false });
     await expect(bulkify.getBulkOperation("op")).rejects.toThrow(/Access denied/);
