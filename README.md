@@ -10,8 +10,9 @@
 
 ## Upgrading to 2.0
 
-2.0 needs Admin API 2026-01 or newer and Node.js 22 or newer, and removes the
-methods that worked with "the newest operation of a type". See the
+2.0 is the first release since 1.8.6. It needs Admin API 2026-01 or newer and
+Node.js 22 or newer, no longer installs Shopify's client packages for you, and
+removes the methods that worked with "the newest operation of a type". See the
 [changelog](CHANGELOG.md#200) for everything that changed and what to use
 instead.
 
@@ -24,6 +25,13 @@ instead.
 
 ```bash
 npm install @kampfire/bulkify
+```
+
+Bulkify works with the Shopify GraphQL client you already use. If you don't
+have one, `@shopify/admin-api-client` is the smallest:
+
+```bash
+npm install @shopify/admin-api-client
 ```
 
 ## Quick start
