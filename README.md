@@ -295,7 +295,25 @@ Other scripts:
 - `pnpm codegen:check`: fails if `src/generated` is out of date
 
 CI runs typecheck, tests, build and `codegen:check` on every push and pull
-request. Publishing runs typecheck, tests and build first.
+request.
+
+### Releasing
+
+Releases are automated with [Changesets](https://changesets.dev):
+
+1. In a PR that changes the package, run `pnpm changeset`, pick patch, minor or
+   major, and write the changelog entry. Commit the file it creates in
+   `.changeset/`. A bot comment on each PR shows what it will release.
+2. When PRs with changesets are merged, a bot opens or updates a
+   **Version Packages** PR that bumps the version in `package.json` and adds
+   the entries to `CHANGELOG.md`.
+3. Merging the Version Packages PR publishes to npm, pushes the `v<version>`
+   tag and creates the GitHub release. Several merged PRs can go out in one
+   release.
+
+Publishing uses npm trusted publishing from `.github/workflows/release.yml`, so
+there's no npm token. The workflow runs typecheck, tests and build before
+packing. `npm publish` still works by hand as a fallback.
 
 ### Store test
 

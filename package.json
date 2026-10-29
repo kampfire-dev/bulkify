@@ -20,7 +20,6 @@
     "test": "vitest run --project unit",
     "example:nested": "tsx ./src/examples/nested-results.ts",
     "typecheck": "tsc -p tsconfig.check.json",
-    "npm:publish": "npm publish",
     "codegen": "graphql-codegen --config codegen.ts",
     "test:store": "vitest run --project store",
     "codegen:check": "graphql-codegen --config codegen.ts --check",
@@ -30,6 +29,7 @@
   "author": "Matt Oskamp",
   "license": "ISC",
   "devDependencies": {
+    "@changesets/cli": "3.0.3",
     "@graphql-codegen/add": "^7.1.1",
     "@graphql-codegen/cli": "^7.4.6",
     "@graphql-codegen/typescript-operations": "^6.2.0",
